@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ASCII CAM</title>
+<style>
+  :root { --fg: #33ff66; --bg: #000; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #out { max-width: 100vw; max-height: 100vh; image-rendering: pixelated; }
+  video, #sample { display: none; }
+  #start { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 1rem;
+    align-items: center; justify-content: center; text-align: center; padding: 2rem; }
+  #start button { font: inherit; font-size: 1.2rem; padding: .8rem 1.6rem; background: transparent;
+    color: var(--fg); border: 2px solid var(--fg); border-radius: 6px; }
+  #err { color: #ff6666; max-width: 30rem; }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; display: none; flex-wrap: wrap; gap: .5rem;
+    align-items: center; justify-content: center; padding: .6rem .6rem calc(.6rem + env(safe-area-inset-bottom));
+    background: rgba(0,0,0,.7); font-size: .85rem; }
+  #bar button, #bar label { font: inherit; color: var(--fg); background: transparent;
+    border: 1px solid var(--fg); border-radius: 4px; padding: .35rem .6rem; }
+  #bar input[type=range] { width: 7rem; vertical-align: middle; accent-color: var(--fg); }
+  #bar.hidden { display: none !important; }
+  a.back { position: fixed; top: .6rem; left: .6rem; color: var(--fg); font-size: .85rem; opacity: .7; }
+</style>
+</head>
+<body>
+<a class="back" href="/">← accueil</a>
+
+<div id="stage"><canvas id="out"></canvas></div>
+<video id="video" playsinline muted autoplay></video>
+<canvas id="sample"></canvas>
+
+<div id="start">
+  <h1>ASCII CAM</h1>
+  <p>Transforme l'image de la caméra en caractères ASCII, en direct.<br>Rien ne quitte ton téléphone.</p>
+  <button id="go">Activer la caméra</button>
+  <p id="err"></p>
+</div>
+
+<div id="bar">
+  <button id="flip" title="Changer de caméra">⟲ caméra</button>
+  <label>cols <input id="cols" type="range" min="40" max="160" step="4" value="90"></label>
+  <label><input id="color" type="checkbox"> couleur</label>
+  <label><input id="invert" type="checkbox"> inverser</label>
+  <button id="ramp">rampe</button>
+  <button id="pause">pause</button>
+  <button id="snap">📷 PNG</button>
+  <button id="hide">masquer</button>
+</div>
+
+<script>
+(() => {
+  const RAMPS = [
+    " .:-=+*#%@",
+    " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+    " ░▒▓█",
+    " 01"
+  ];
+  const video = document.getElementById('video');
+  const sample = document.getElementById('sample');
+  const sctx = sample.getContext('2d', { willReadFrequently: true });
+  const out = document.getElementById('out');
+  const octx = out.getContext('2d');
+  const $ = id => document.getElementById(id);
+
+  let facing = 'environment', stream = null, running = true;
+  let rampIdx = 0, cols = +$('cols').value, color = false, invert = false;
+  const CHAR_ASPECT = 0.55; // largeur/hauteur d'un caractère monospace
+  const FONT_PX = 12;
+
+  async function startCam() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Caméra indisponible. La page doit être ouverte en HTTPS dans un navigateur récent.");
+    }
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facing }, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+  }
+
+  function frame() {
+    requestAnimationFrame(frame);
+    if (!running || video.readyState < 2) return;
+
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw) return;
+    const rows = Math.max(1, Math.round(cols * (vh / vw) * CHAR_ASPECT));
+    if (sample.width !== cols || sample.height !== rows) { sample.width = cols; sample.height = rows; }
+
+    // Miroir pour la caméra frontale
+    sctx.save();
+    if (facing === 'user') { sctx.translate(cols, 0); sctx.scale(-1, 1); }
+    sctx.drawImage(video, 0, 0, cols, rows);
+    sctx.restore();
+    const px = sctx.getImageData(0, 0, cols, rows).data;
+
+    const cw = FONT_PX * CHAR_ASPECT, ch = FONT_PX;
+    const W = Math.ceil(cols * cw), H = rows * ch;
+    if (out.width !== W || out.height !== H) {
+      out.width = W; out.height = H;
+      fit();
+    }
+    octx.fillStyle = '#000';
+    octx.fillRect(0, 0, W, H);
+    octx.font = `${FONT_PX}px ui-monospace, Menlo, Consolas, monospace`;
+    octx.textBaseline = 'top';
+
+    const ramp = RAMPS[rampIdx], n = ramp.length - 1;
+    const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+    if (!color) octx.fillStyle = fg;
+
+    for (let y = 0; y < rows; y++) {
+      if (!color) {
+        let line = '';
+        for (let x = 0; x < cols; x++) {
+          const i = (y * cols + x) * 4;
+          let l = (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
+          if (invert) l = 1 - l;
+          line += ramp[Math.round(l * n)];
+        }
+        octx.fillText(line, 0, y * ch);
+      } else {
+        for (let x = 0; x < cols; x++) {
+          const i = (y * cols + x) * 4;
+          const r = px[i], g = px[i + 1], b = px[i + 2];
+          let l = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          if (invert) l = 1 - l;
+          const c = ramp[Math.round(l * n)];
+          if (c === ' ') continue;
+          octx.fillStyle = `rgb(${r},${g},${b})`;
+          octx.fillText(c, x * cw, y * ch);
+        }
+      }
+    }
+  }
+
+  function fit() {
+    const s = Math.min(window.innerWidth / out.width, window.innerHeight / out.height);
+    out.style.width = (out.width * s) + 'px';
+    out.style.height = (out.height * s) + 'px';
+  }
+  window.addEventListener('resize', fit);
+
+  $('go').onclick = async () => {
+    $('err').textContent = '';
+    try {
+      await startCam();
+      $('start').style.display = 'none';
+      $('bar').style.display = 'flex';
+      requestAnimationFrame(frame);
+    } catch (e) {
+      $('err').textContent = e.name === 'NotAllowedError'
+        ? "Accès à la caméra refusé. Autorise-le dans les réglages du navigateur puis réessaie."
+        : (e.message || String(e));
+    }
+  };
+  $('flip').onclick = async () => {
+    facing = facing === 'environment' ? 'user' : 'environment';
+    try { await startCam(); } catch (e) { alert(e.message); }
+  };
+  $('cols').oninput = e => cols = +e.target.value;
+  $('color').onchange = e => color = e.target.checked;
+  $('invert').onchange = e => invert = e.target.checked;
+  $('ramp').onclick = () => rampIdx = (rampIdx + 1) % RAMPS.length;
+  $('pause').onclick = e => { running = !running; e.target.textContent = running ? 'pause' : 'reprendre'; };
+  $('snap').onclick = () => {
+    const a = document.createElement('a');
+    a.download = `ascii-cam-${Date.now()}.png`;
+    a.href = out.toDataURL('image/png');
+    a.click();
+  };
+  $('hide').onclick = () => {
+    $('bar').classList.add('hidden');
+    setTimeout(() => out.addEventListener('click', () => $('bar').classList.remove('hidden'), { once: true }), 0);
+  };
+})();
+</script>
+</body>
+</html>
