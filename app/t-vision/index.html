@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>T-VISION</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root { --red: #ff2a2a; --red-dim: rgba(255,42,42,.55); --bg: #000; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--red);
+    font-family: "Share Tech Mono", ui-monospace, monospace; overflow: hidden;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  #gl { z-index: 0; }
+  #hud { z-index: 1; touch-action: manipulation; }
+  video, #probe { display: none; }
+
+  #start { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1.2rem; padding: 2rem; text-align: center;
+    background: radial-gradient(ellipse at center, #1a0000 0%, #000 70%); }
+  #start h1 { font-family: Rajdhani, sans-serif; font-weight: 700; font-size: 3rem; letter-spacing: .35em;
+    margin: 0 0 0 .35em; text-shadow: 0 0 18px rgba(255,40,40,.6); }
+  #start p { max-width: 28rem; line-height: 1.5; color: #ff8a8a; margin: 0; font-size: .95rem; }
+  #start button { font: inherit; font-size: 1.1rem; letter-spacing: .2em; padding: .9rem 1.8rem;
+    color: var(--red); background: rgba(255,0,0,.06); border: 1px solid var(--red);
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px); }
+  #start button:active { background: rgba(255,0,0,.2); }
+  #err { color: #ff6b6b; font-size: .85rem; min-height: 1.2em; }
+
+  #bar { position: fixed; z-index: 2; right: .6rem; bottom: calc(.6rem + env(safe-area-inset-bottom));
+    display: none; gap: .4rem; }
+  #bar button, a.back { font: inherit; font-size: .75rem; letter-spacing: .1em; color: var(--red);
+    background: rgba(0,0,0,.55); border: 1px solid var(--red-dim); padding: .4rem .55rem; text-decoration: none; }
+  #bar button.off { opacity: .45; }
+  a.back { position: fixed; z-index: 2; left: .6rem; bottom: calc(.6rem + env(safe-area-inset-bottom)); }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="hud"></canvas>
+<video id="video" playsinline muted autoplay></video>
+<canvas id="probe" width="8" height="8"></canvas>
+
+<div id="start">
+  <h1>T-VISION</h1>
+  <p>Vision d'analyse en temps réel. La caméra est filtrée, les objets détectés et suivis sur le téléphone. Aucune image ne quitte l'appareil.</p>
+  <p>Touche une cible pour la verrouiller.</p>
+  <button id="go">ACTIVER</button>
+  <div id="err"></div>
+</div>
+
+<div id="bar">
+  <button id="bSeg" title="Silhouettes">SEG</button>
+  <button id="bFlip" title="Changer de caméra">CAM</button>
+  <button id="bHud" title="Masquer le HUD">HUD</button>
+</div>
+<a class="back" href="/" style="display:none" id="back">◂ ACCUEIL</a>
+
+<script type="module">
+const MP_VER = "1.2.3";
+const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}`;
+const DET_MODEL = "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite";
+const SEG_MODEL = "https://storage.googleapis.com/mediapipe-models/image_segmenter/deeplab_v3/float32/1/deeplab_v3.tflite";
+
+const LABELS_FR = {
+  person:"PERSONNE", bicycle:"VÉLO", car:"VOITURE", motorcycle:"MOTO", airplane:"AVION", bus:"BUS", train:"TRAIN",
+  truck:"CAMION", boat:"BATEAU", "traffic light":"FEU", "fire hydrant":"BORNE INCENDIE", "stop sign":"PANNEAU STOP",
+  "parking meter":"HORODATEUR", bench:"BANC", bird:"OISEAU", cat:"CHAT", dog:"CHIEN", horse:"CHEVAL", sheep:"MOUTON",
+  cow:"VACHE", elephant:"ÉLÉPHANT", bear:"OURS", zebra:"ZÈBRE", giraffe:"GIRAFE", backpack:"SAC À DOS",
+  umbrella:"PARAPLUIE", handbag:"SAC À MAIN", tie:"CRAVATE", suitcase:"VALISE", frisbee:"FRISBEE", skis:"SKIS",
+  snowboard:"SNOWBOARD", "sports ball":"BALLON", kite:"CERF-VOLANT", "baseball bat":"BATTE", "baseball glove":"GANT",
+  skateboard:"SKATE", surfboard:"SURF", "tennis racket":"RAQUETTE", bottle:"BOUTEILLE", "wine glass":"VERRE À VIN",
+  cup:"TASSE", fork:"FOURCHETTE", knife:"COUTEAU", spoon:"CUILLÈRE", bowl:"BOL", banana:"BANANE", apple:"POMME",
+  sandwich:"SANDWICH", orange:"ORANGE", broccoli:"BROCOLI", carrot:"CAROTTE", "hot dog":"HOT-DOG", pizza:"PIZZA",
+  donut:"DONUT", cake:"GÂTEAU", chair:"CHAISE", couch:"CANAPÉ", "potted plant":"PLANTE", bed:"LIT",
+  "dining table":"TABLE", toilet:"TOILETTES", tv:"ÉCRAN", laptop:"ORDINATEUR", mouse:"SOURIS", remote:"TÉLÉCOMMANDE",
+  keyboard:"CLAVIER", "cell phone":"TÉLÉPHONE", microwave:"MICRO-ONDES", oven:"FOUR", toaster:"GRILLE-PAIN",
+  sink:"ÉVIER", refrigerator:"FRIGO", book:"LIVRE", clock:"HORLOGE", vase:"VASE", scissors:"CISEAUX",
+  "teddy bear":"PELUCHE", "hair drier":"SÈCHE-CHEVEUX", toothbrush:"BROSSE À DENTS"
+};
+// Hauteurs réelles approximatives (m) pour une estimation de distance grossière
+const HEIGHTS = { person:1.7, car:1.5, bicycle:1.0, motorcycle:1.1, bus:3.0, truck:3.0, dog:0.6, cat:0.3,
+  chair:0.9, couch:0.85, bottle:0.25, cup:0.1, "wine glass":0.2, laptop:0.25, tv:0.6, "cell phone":0.15,
+  book:0.22, "potted plant":0.5, backpack:0.45, bench:0.8, clock:0.3, vase:0.3, bird:0.2, "dining table":0.75 };
+
+const $ = id => document.getElementById(id);
+const video = $("video"), glc = $("gl"), hud = $("hud"), ctx = hud.getContext("2d");
+const probe = $("probe"), pctx = probe.getContext("2d", { willReadFrequently: true });
+
+const state = {
+  facing: "environment", stream: null, mirror: false,
+  W: 0, H: 0, dpr: 1, scale: 1, offX: 0, offY: 0, vw: 0, vh: 0,
+  segOn: true, hudOn: true, running: false,
+  detector: null, segmenter: null, lastDet: 0, lastSeg: 0, lastVideoTime: -1,
+  tracks: [], nextId: 1, primaryId: null, manualPrimary: false,
+  log: [], fps: 0, frames: 0, fpsT: 0, maskReady: false, t0: performance.now(),
+  primaryColor: null, lastProbe: 0, hex: []
+};
+
+/* ---------------- WebGL : filtre d'image ---------------- */
+const gl = glc.getContext("webgl", { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false });
+const VS = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
+const FS = `
+precision highp float;
+uniform sampler2D uVideo, uMask;
+uniform vec2 uRes, uOff, uVid, uMaskTexel;
+uniform float uScale, uMirror, uTime, uSeg, uDpr;
+
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+
+vec2 toUV(vec2 px){
+  vec2 uv = (px - uOff) / uScale / uVid;
+  if (uMirror > .5) uv.x = 1. - uv.x;
+  return uv;
+}
+float lumAt(vec2 uv){ return dot(texture2D(uVideo, uv).rgb, vec3(.299,.587,.114)); }
+
+void main(){
+  vec2 px = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
+  vec2 uv = toUV(px);
+  vec2 c = px / uRes - .5;
+  float r2 = dot(c, c);
+
+  // aberration chromatique radiale
+  vec2 ab = c * r2 * .035;
+  float lr = lumAt(uv + ab), lg = lumAt(uv), lb = lumAt(uv - ab);
+  float l = lg;
+  l = smoothstep(.04, .96, l);
+
+  // silhouettes (segmentation)
+  float m = 0., edge = 0.;
+  if (uSeg > .5) {
+    m = texture2D(uMask, uv).r;
+    vec2 t = uMaskTexel * 1.5;
+    float n = texture2D(uMask, uv + vec2(t.x,0.)).r + texture2D(uMask, uv - vec2(t.x,0.)).r
+            + texture2D(uMask, uv + vec2(0.,t.y)).r + texture2D(uMask, uv - vec2(0.,t.y)).r;
+    edge = clamp(abs(m * 4. - n) * 1.6, 0., 1.);
+    l = mix(l * .55, min(1., l * 1.15 + .05), m);
+  }
+
+  // rampe thermique : noir -> rouge -> orange -> blanc chaud
+  vec3 col = vec3(pow(l, .75) * 1.05, pow(l, 2.4) * .55, pow(l, 3.6) * .35);
+  col.r += (lr - lg) * .35; col.b += (lb - lg) * .25;
+
+  // remplissage hachuré animé sur les silhouettes + contour lumineux
+  float hatch = step(.86, fract((px.y + px.x * .35) / (6. * uDpr) - uTime * 1.5));
+  col += vec3(.35, .03, .02) * m * hatch * .45;
+  col += vec3(1., .25, .18) * edge;
+
+  // lignes de balayage + bande de scan
+  col *= .86 + .14 * sin(px.y / uDpr * 3.14159 * .5);
+  float band = exp(-pow((px.y / uRes.y - fract(uTime * .12)) * 22., 2.));
+  col += vec3(.22, .02, .01) * band;
+
+  // grain + vignette
+  col += (hash(px + fract(uTime) * 100.) - .5) * .06;
+  col *= 1. - r2 * 1.35;
+
+  // hors champ vidéo
+  if (uv.x < 0. || uv.x > 1. || uv.y < 0. || uv.y > 1.) col = vec3(0.);
+  gl_FragColor = vec4(max(col, 0.), 1.);
+}`;
+
+function shader(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+let prog, U = {}, texVideo, texMask;
+function initGL() {
+  prog = gl.createProgram();
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, "p");
+  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  for (const n of ["uVideo","uMask","uRes","uOff","uVid","uMaskTexel","uScale","uMirror","uTime","uSeg","uDpr"])
+    U[n] = gl.getUniformLocation(prog, n);
+  const mk = () => {
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  };
+  texVideo = mk(); texMask = mk();
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 1, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, new Uint8Array([0]));
+  gl.uniform1i(U.uVideo, 0); gl.uniform1i(U.uMask, 1);
+}
+
+let maskW = 1, maskH = 1;
+function uploadMask(data, w, h) {
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texMask);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, w, h, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, data);
+  maskW = w; maskH = h; state.maskReady = true;
+}
+
+function drawGL(now) {
+  gl.viewport(0, 0, glc.width, glc.height);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texVideo);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+  const d = state.dpr;
+  gl.uniform2f(U.uRes, glc.width, glc.height);
+  gl.uniform2f(U.uOff, state.offX * d, state.offY * d);
+  gl.uniform1f(U.uScale, state.scale * d);
+  gl.uniform2f(U.uVid, state.vw, state.vh);
+  gl.uniform2f(U.uMaskTexel, 1 / maskW, 1 / maskH);
+  gl.uniform1f(U.uMirror, state.mirror ? 1 : 0);
+  gl.uniform1f(U.uTime, (now - state.t0) / 1000);
+  gl.uniform1f(U.uSeg, state.segOn && state.maskReady ? 1 : 0);
+  gl.uniform1f(U.uDpr, d);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+/* ---------------- Géométrie écran <-> vidéo ---------------- */
+function layout() {
+  const d = Math.min(window.devicePixelRatio || 1, 2);
+  state.dpr = d; state.W = innerWidth; state.H = innerHeight;
+  for (const c of [glc, hud]) { c.width = Math.round(state.W * d); c.height = Math.round(state.H * d); }
+  state.vw = video.videoWidth || 1280; state.vh = video.videoHeight || 720;
+  state.scale = Math.max(state.W / state.vw, state.H / state.vh);
+  state.offX = (state.W - state.vw * state.scale) / 2;
+  state.offY = (state.H - state.vh * state.scale) / 2;
+}
+function v2s(x, y) {
+  let sx = x * state.scale + state.offX;
+  if (state.mirror) sx = state.W - sx;
+  return [sx, y * state.scale + state.offY];
+}
+function boxToScreen(b) {
+  const [x1, y1] = v2s(b.x, b.y), [x2, y2] = v2s(b.x + b.w, b.y + b.h);
+  return { x: Math.min(x1, x2), y: y1, w: Math.abs(x2 - x1), h: y2 - y1 };
+}
+
+/* ---------------- Journal ---------------- */
+function log(text, strong = false) {
+  state.log.push({ text, t: performance.now(), strong });
+  if (state.log.length > 9) state.log.shift();
+}
+
+/* ---------------- Modèles ---------------- */
+async function loadModels() {
+  log("> CHARGEMENT NOYAU VISION…");
+  let vision;
+  try {
+    const mod = await import(`${MP_URL}/vision_bundle.mjs`);
+    vision = { mod, files: await mod.FilesetResolver.forVisionTasks(`${MP_URL}/wasm`) };
+  } catch (e) { log("! NOYAU INDISPONIBLE", true); console.error(e); return; }
+  const { ObjectDetector, ImageSegmenter } = vision.mod;
+
+  const make = async (Cls, opts) => {
+    try { return await Cls.createFromOptions(vision.files, { ...opts, baseOptions: { ...opts.baseOptions, delegate: "GPU" } }); }
+    catch (e) {
+      console.warn("GPU KO, repli CPU", e);
+      return await Cls.createFromOptions(vision.files, { ...opts, baseOptions: { ...opts.baseOptions, delegate: "CPU" } });
+    }
+  };
+  try {
+    state.detector = await make(ObjectDetector, {
+      baseOptions: { modelAssetPath: DET_MODEL }, runningMode: "VIDEO", scoreThreshold: 0.42, maxResults: 8 });
+    log("> DÉTECTION : EN LIGNE");
+  } catch (e) { log("! DÉTECTION HORS LIGNE", true); console.error(e); }
+  try {
+    state.segmenter = await make(ImageSegmenter, {
+      baseOptions: { modelAssetPath: SEG_MODEL }, runningMode: "VIDEO",
+      outputCategoryMask: true, outputConfidenceMasks: false });
+    log("> SEGMENTATION : EN LIGNE");
+  } catch (e) { log("! SEGMENTATION HORS LIGNE", true); console.error(e); }
+}
+
+/* ---------------- Suivi ---------------- */
+function iou(a, b) {
+  const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+  const x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h);
+  const i = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  return i / (a.w * a.h + b.w * b.h - i + 1e-6);
+}
+function updateTracks(dets, now) {
+  const used = new Set();
+  for (const d of dets) {
+    const cat = d.categories[0]; if (!cat) continue;
+    const box = { x: d.boundingBox.originX, y: d.boundingBox.originY, w: d.boundingBox.width, h: d.boundingBox.height };
+    let best = null, bestI = 0.25;
+    for (const t of state.tracks) {
+      if (used.has(t) || t.cls !== cat.categoryName) continue;
+      const v = iou(t.box, box); if (v > bestI) { bestI = v; best = t; }
+    }
+    if (best) {
+      used.add(best);
+      const k = 0.45;
+      for (const key of ["x","y","w","h"]) best.box[key] += (box[key] - best.box[key]) * k;
+      best.score += (cat.score - best.score) * 0.3; best.seen = now; best.hits++;
+    } else {
+      const t = { id: state.nextId++, cls: cat.categoryName, box, score: cat.score, born: now, seen: now, hits: 1, announced: false };
+      state.tracks.push(t); used.add(t);
+    }
+  }
+  state.tracks = state.tracks.filter(t => {
+    const alive = now - t.seen < 600;
+    if (!alive && t.announced) log(`> PERTE ID ${pad(t.id)} : ${fr(t.cls)}`);
+    if (!alive && t.id === state.primaryId) { state.primaryId = null; state.manualPrimary = false; }
+    return alive;
+  });
+  for (const t of state.tracks) {
+    if (!t.announced && t.hits >= 3) {
+      t.announced = true; t.lock = now;
+      log(`> ACQUISITION ID ${pad(t.id)} : ${fr(t.cls)} ${Math.round(t.score * 100)}%`, true);
+    }
+  }
+  // cible prioritaire auto : la personne la plus grande, sinon le plus grand objet
+  if (!state.manualPrimary) {
+    const cands = state.tracks.filter(t => t.announced);
+    cands.sort((a, b) => ((b.cls === "person") - (a.cls === "person")) || (b.box.w * b.box.h - a.box.w * a.box.h));
+    const p = cands[0];
+    if (p && p.id !== state.primaryId) { state.primaryId = p.id; p.primaryAt = now; }
+    if (!p) state.primaryId = null;
+  }
+}
+
+/* ---------------- Inférence ---------------- */
+function infer(now) {
+  if (video.readyState < 2 || video.currentTime === state.lastVideoTime) return;
+  const ts = now;
+  if (state.detector && now - state.lastDet > 80) {
+    state.lastDet = now; state.lastVideoTime = video.currentTime;
+    try { updateTracks(state.detector.detectForVideo(video, ts).detections, now); } catch (e) { console.error(e); }
+    return; // une seule inférence par frame
+  }
+  if (state.segOn && state.segmenter && now - state.lastSeg > 160) {
+    state.lastSeg = now; state.lastVideoTime = video.currentTime;
+    try {
+      state.segmenter.segmentForVideo(video, ts, res => {
+        const mk = res.categoryMask; if (!mk) return;
+        const src = mk.getAsUint8Array(), out = new Uint8Array(src.length);
+        for (let i = 0; i < src.length; i++) out[i] = src[i] ? 255 : 0;
+        uploadMask(out, mk.width, mk.height);
+      });
+    } catch (e) { console.error(e); }
+  }
+}
+
+/* ---------------- HUD ---------------- */
+const pad = n => String(n).padStart(2, "0");
+const fr = c => LABELS_FR[c] || c.toUpperCase();
+const easeOut = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+const RED = "#ff2a2a", RED_SOFT = "rgba(255,42,42,.55)", RED_FAINT = "rgba(255,42,42,.18)", WHITE = "#ffd9d0";
+
+function font(px, bold) { return `${bold ? "700 " : ""}${px}px ${bold ? "Rajdhani" : "'Share Tech Mono'"}, monospace`; }
+
+function brackets(x, y, w, h, len, color, lw) {
+  ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.beginPath();
+  ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y);
+  ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len);
+  ctx.moveTo(x + w, y + h - len); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - len, y + h);
+  ctx.moveTo(x + len, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - len);
+  ctx.stroke();
+}
+
+function distanceOf(t) {
+  const H = HEIGHTS[t.cls]; if (!H || t.box.h < 4) return null;
+  const f = state.vh * 0.9; // focale approx. pour un champ vertical d'environ 58°
+  return H * f / t.box.h;
+}
+
+function probeColor(t, now) {
+  if (now - state.lastProbe < 500) return;
+  state.lastProbe = now;
+  const b = t.box, sx = b.x + b.w * .3, sy = b.y + b.h * .3;
+  try {
+    pctx.drawImage(video, sx, sy, b.w * .4, b.h * .4, 0, 0, 8, 8);
+    const d = pctx.getImageData(0, 0, 8, 8).data; let r = 0, g = 0, bl = 0;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; bl += d[i+2]; }
+    const n = d.length / 4;
+    state.primaryColor = "#" + [r, g, bl].map(v => Math.round(v / n).toString(16).padStart(2, "0")).join("").toUpperCase();
+  } catch {}
+}
+
+function drawHUD(now) {
+  const d = state.dpr, W = state.W, H = state.H;
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (!state.hudOn) return;
+  const base = Math.max(10, Math.min(W, H) / 34);
+  const t = (now - state.t0) / 1000;
+  const safeTop = 10 + state.sat;
+
+  ctx.textBaseline = "top";
+  ctx.shadowColor = "rgba(255,30,30,.8)"; ctx.shadowBlur = 6;
+
+  // --- barre haute
+  ctx.fillStyle = RED; ctx.font = font(base * 1.35, true);
+  ctx.fillText("T-VISION", 12, safeTop);
+  ctx.font = font(base * .8);
+  ctx.fillStyle = RED_SOFT;
+  const date = new Date();
+  const clock = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${String(date.getMilliseconds()).padStart(3,"0")}`;
+  ctx.fillText(`ANALYSE ACTIVE // ${clock}`, 12, safeTop + base * 1.45);
+  ctx.textAlign = "right";
+  const nObj = state.tracks.filter(t => t.announced).length;
+  ctx.fillText(`FPS ${state.fps}  OBJ ${pad(nObj)}  SEG ${state.segOn && state.segmenter ? "ON" : "OFF"}`, W - 12, safeTop + base * .4);
+  ctx.fillText(state.facing === "environment" ? "CAPTEUR ARRIÈRE" : "CAPTEUR AVANT", W - 12, safeTop + base * 1.45);
+  ctx.textAlign = "left";
+  ctx.strokeStyle = RED_FAINT; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(12, safeTop + base * 2.6); ctx.lineTo(W - 12, safeTop + base * 2.6); ctx.stroke();
+
+  // --- réticule central
+  const cx = W / 2, cy = H / 2, R = Math.min(W, H) * .07;
+  ctx.strokeStyle = RED_SOFT; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 2; ctx.strokeStyle = RED;
+  for (let i = 0; i < 3; i++) {
+    const a = t * .8 + i * Math.PI * 2 / 3;
+    ctx.beginPath(); ctx.arc(cx, cy, R + 6, a, a + .5); ctx.stroke();
+  }
+  ctx.lineWidth = 1; ctx.beginPath();
+  for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { ctx.moveTo(cx + dx * R * .55, cy + dy * R * .55); ctx.lineTo(cx + dx * R * .85, cy + dy * R * .85); }
+  ctx.stroke();
+
+  // --- cibles
+  let primary = null;
+  for (const tr of state.tracks) {
+    if (!tr.announced) continue;
+    const s = boxToScreen(tr.box);
+    const isP = tr.id === state.primaryId; if (isP) primary = { tr, s };
+    const k = easeOut((now - tr.lock) / 450);
+    const grow = 1 + (1 - k) * .6;
+    const gx = s.x - s.w * (grow - 1) / 2, gy = s.y - s.h * (grow - 1) / 2;
+    const flicker = k < 1 ? (Math.sin(now / 25) > 0 ? 1 : .3) : 1;
+    ctx.globalAlpha = flicker * (isP ? 1 : .8);
+    const len = Math.max(8, Math.min(s.w, s.h) * .18);
+    brackets(gx, gy, s.w * grow, s.h * grow, len, isP ? WHITE : RED, isP ? 2.2 : 1.4);
+
+    // étiquette
+    const lbl = `${pad(tr.id)} ${fr(tr.cls)}`;
+    ctx.font = font(base * .95, true);
+    const tw = ctx.measureText(lbl).width;
+    const ly = Math.max(safeTop + base * 3, s.y - base * 1.5);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = isP ? "rgba(255,60,50,.85)" : "rgba(90,0,0,.7)";
+    ctx.fillRect(s.x, ly, tw + 10, base * 1.25);
+    ctx.fillStyle = isP ? "#1a0000" : WHITE;
+    ctx.fillText(lbl, s.x + 5, ly + base * .12);
+    ctx.shadowBlur = 6;
+    ctx.font = font(base * .75); ctx.fillStyle = RED_SOFT;
+    const dist = distanceOf(tr);
+    ctx.fillText(`${Math.round(tr.score * 100)}%${dist ? `  ~${dist.toFixed(1)}m` : ""}`, s.x + tw + 16, ly + base * .3);
+
+    // jauge de confiance verticale
+    const gh = s.h * tr.score;
+    ctx.fillStyle = RED_FAINT; ctx.fillRect(s.x + s.w + 5, s.y, 3, s.h);
+    ctx.fillStyle = RED; ctx.fillRect(s.x + s.w + 5, s.y + s.h - gh, 3, gh);
+    ctx.globalAlpha = 1;
+  }
+
+  // --- cible prioritaire : lignes de visée + panneau
+  if (primary) {
+    const { tr, s } = primary;
+    const px = s.x + s.w / 2, py = s.y + s.h / 2;
+    ctx.strokeStyle = RED_FAINT; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(s.x - 8, py); ctx.moveTo(s.x + s.w + 12, py); ctx.lineTo(W, py);
+    ctx.moveTo(px, safeTop + base * 2.6); ctx.lineTo(px, s.y - 8); ctx.moveTo(px, s.y + s.h + 8); ctx.lineTo(px, H); ctx.stroke();
+    ctx.setLineDash([]);
+    const rr = Math.min(s.w, s.h) * .22;
+    ctx.strokeStyle = WHITE; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(px, py, rr, t * 2, t * 2 + Math.PI * 1.4); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI * 2); ctx.fillStyle = WHITE; ctx.fill();
+
+    probeColor(tr, now);
+    const dist = distanceOf(tr);
+    const age = ((now - tr.born) / 1000).toFixed(1);
+    const lines = [
+      ["CIBLE", `ID ${pad(tr.id)}${state.manualPrimary ? " [VERROU]" : ""}`],
+      ["CLASSE", fr(tr.cls)],
+      ["CONFIANCE", `${(tr.score * 100).toFixed(1)}%`],
+      ["DISTANCE", dist ? `~${dist.toFixed(2)} m (EST.)` : "N/D"],
+      ["TAILLE", `${Math.round(tr.box.w)}×${Math.round(tr.box.h)} px`],
+      ["SUIVI", `${age} s`],
+      ["TEINTE", state.primaryColor || "…"],
+    ];
+    const pw = Math.min(W * .48, base * 15), lh = base * 1.15, ph = lh * lines.length + base * 1.9;
+    const pxp = W - pw - 12, pyp = H - ph - base * 3.4;
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(20,0,0,.62)"; ctx.fillRect(pxp, pyp, pw, ph);
+    ctx.strokeStyle = RED_SOFT; ctx.strokeRect(pxp + .5, pyp + .5, pw - 1, ph - 1);
+    ctx.fillStyle = RED; ctx.fillRect(pxp, pyp, 4, ph);
+    ctx.font = font(base * .9, true); ctx.fillStyle = RED;
+    ctx.fillText("PROFIL CIBLE", pxp + 12, pyp + base * .45);
+    ctx.font = font(base * .78);
+    lines.forEach(([k, v], i) => {
+      const y = pyp + base * 1.7 + i * lh;
+      ctx.fillStyle = RED_SOFT; ctx.fillText(k, pxp + 12, y);
+      ctx.fillStyle = WHITE; ctx.textAlign = "right"; ctx.fillText(v, pxp + pw - 10, y); ctx.textAlign = "left";
+    });
+    if (state.primaryColor) {
+      ctx.fillStyle = state.primaryColor;
+      ctx.fillRect(pxp + pw - 10 - ctx.measureText(state.primaryColor).width - base * 1.1, pyp + base * 1.7 + 6 * lh + 1, base * .75, base * .75);
+    }
+    ctx.shadowBlur = 6;
+  }
+
+  // --- journal (gauche, effet machine à écrire)
+  ctx.font = font(base * .78);
+  const ly0 = H - base * 3.6 - state.sab - state.log.length * base * 1.1;
+  state.log.forEach((e, i) => {
+    const n = Math.floor((now - e.t) / 18);
+    const txt = e.text.slice(0, n) + (n < e.text.length && Math.floor(now / 120) % 2 ? "▌" : "");
+    ctx.fillStyle = e.strong ? WHITE : RED_SOFT;
+    ctx.globalAlpha = .35 + .65 * ((i + 1) / state.log.length);
+    ctx.fillText(txt, 12, ly0 + i * base * 1.1);
+  });
+  ctx.globalAlpha = 1;
+
+  // --- flux hexadécimal discret (bord droit)
+  if (state.frames % 4 === 0) {
+    state.hex.push(Array.from({ length: 4 }, () => Math.floor(Math.random() * 65536).toString(16).padStart(4, "0").toUpperCase()).join(" "));
+    if (state.hex.length > 14) state.hex.shift();
+  }
+  ctx.font = font(base * .62); ctx.fillStyle = "rgba(255,42,42,.28)"; ctx.textAlign = "right"; ctx.shadowBlur = 0;
+  state.hex.forEach((h, i) => ctx.fillText(h, W - 12, safeTop + base * 3.3 + i * base * .78));
+  ctx.textAlign = "left";
+
+  // --- bandeau bas : secteur de scan
+  const sector = Math.floor(t / 1.5) % 8 + 1;
+  ctx.font = font(base * .75); ctx.fillStyle = RED_SOFT;
+  ctx.fillText(`SCAN SECTEUR ${sector}/8  ${"■".repeat(sector)}${"□".repeat(8 - sector)}`, 12, safeTop + base * 3);
+}
+
+/* ---------------- Boucle ---------------- */
+function loop(now) {
+  if (!state.running) return;
+  state.frames++;
+  if (now - state.fpsT > 1000) { state.fps = state.frames - (state.fpsBase || 0); state.fpsBase = state.frames; state.fpsT = now; }
+  if (video.readyState >= 2) {
+    if (video.videoWidth !== state.vw || video.videoHeight !== state.vh) layout();
+    infer(now);
+    drawGL(now);
+  }
+  drawHUD(now);
+  requestAnimationFrame(loop);
+}
+
+/* ---------------- Caméra ---------------- */
+async function startCamera() {
+  if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: false, video: { facingMode: { ideal: state.facing }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+  state.stream = stream; video.srcObject = stream;
+  const s = stream.getVideoTracks()[0].getSettings();
+  state.mirror = (s.facingMode || state.facing) === "user";
+  await video.play();
+  await new Promise(r => video.readyState >= 2 ? r() : video.addEventListener("loadeddata", r, { once: true }));
+  layout();
+}
+
+async function start() {
+  $("err").textContent = "";
+  if (!navigator.mediaDevices?.getUserMedia) { $("err").textContent = "Caméra non disponible (HTTPS requis)."; return; }
+  if (!gl) { $("err").textContent = "WebGL indisponible sur ce navigateur."; return; }
+  try {
+    initGL();
+    await startCamera();
+  } catch (e) { $("err").textContent = "Accès caméra refusé ou impossible : " + e.message; return; }
+  try { await navigator.wakeLock?.request("screen"); } catch {}
+  await document.fonts?.ready;
+  $("start").style.display = "none"; $("bar").style.display = "flex"; $("back").style.display = "block";
+  state.running = true; state.t0 = performance.now();
+  log("> INITIALISATION SYSTÈME OPTIQUE");
+  log("> CALIBRATION CAPTEUR : OK");
+  requestAnimationFrame(loop);
+  loadModels();
+}
+
+/* ---------------- Interactions ---------------- */
+$("go").addEventListener("click", start);
+$("bFlip").addEventListener("click", async () => {
+  state.facing = state.facing === "environment" ? "user" : "environment";
+  state.tracks = []; state.primaryId = null; state.manualPrimary = false; state.maskReady = false;
+  try { await startCamera(); log(`> BASCULE ${state.facing === "user" ? "CAPTEUR AVANT" : "CAPTEUR ARRIÈRE"}`); }
+  catch (e) { log("! BASCULE IMPOSSIBLE", true); }
+});
+$("bSeg").addEventListener("click", e => {
+  state.segOn = !state.segOn; e.currentTarget.classList.toggle("off", !state.segOn);
+  log(`> SILHOUETTES : ${state.segOn ? "ON" : "OFF"}`);
+});
+$("bHud").addEventListener("click", e => {
+  state.hudOn = !state.hudOn; e.currentTarget.classList.toggle("off", !state.hudOn);
+});
+hud.addEventListener("pointerdown", e => {
+  const x = e.clientX, y = e.clientY;
+  let hit = null, area = Infinity;
+  for (const t of state.tracks) {
+    if (!t.announced) continue;
+    const s = boxToScreen(t.box);
+    if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h && s.w * s.h < area) { hit = t; area = s.w * s.h; }
+  }
+  if (hit) {
+    state.primaryId = hit.id; state.manualPrimary = true; hit.lock = performance.now(); state.primaryColor = null; state.lastProbe = 0;
+    log(`> VERROUILLAGE ID ${pad(hit.id)} : ${fr(hit.cls)}`, true);
+    navigator.vibrate?.(35);
+  } else if (state.manualPrimary) {
+    state.manualPrimary = false; log("> VERROU LIBÉRÉ");
+  }
+});
+addEventListener("resize", layout);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { state.running = false; }
+  else if (state.stream && !state.running && $("start").style.display === "none") {
+    state.running = true; video.play().catch(() => {});
+    navigator.wakeLock?.request("screen").catch(() => {});
+    requestAnimationFrame(loop);
+  }
+});
+// zones sûres (encoche) lues une fois
+const probeEl = document.createElement("div");
+probeEl.style.cssText = "position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)";
+document.body.appendChild(probeEl);
+const cs = getComputedStyle(probeEl);
+state.sat = parseInt(cs.paddingTop) || 0;
+state.sab = parseInt(cs.paddingBottom) || 0;
+if (new URLSearchParams(location.search).has("debug")) window.__tv = { state, updateTracks, uploadMask };
+</script>
+</body>
+</html>
