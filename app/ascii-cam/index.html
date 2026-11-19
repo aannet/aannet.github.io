@@ -7,10 +7,9 @@
 <style>
   :root { --fg: #33ff66; --bg: #000; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
-    font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; touch-action: manipulation;
-    -webkit-user-select: none; user-select: none; }
+    font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
   #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
-  #out { max-width: 100vw; max-height: 100vh; }
+  #out { max-width: 100vw; max-height: 100vh; image-rendering: pixelated; }
   video, #sample { display: none; }
   #start { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 1rem;
     align-items: center; justify-content: center; text-align: center; padding: 2rem; }
@@ -24,20 +23,11 @@
     border: 1px solid var(--fg); border-radius: 4px; padding: .35rem .6rem; }
   #bar input[type=range] { width: 7rem; vertical-align: middle; accent-color: var(--fg); }
   #bar.hidden { display: none !important; }
-  a.back, #gear { position: fixed; top: .6rem; color: var(--fg); font-size: .85rem; opacity: .7; }
-  a.back { left: .6rem; }
-  #gear { right: .6rem; display: none; background: transparent; border: 1px solid var(--fg);
-    border-radius: 4px; font: inherit; padding: .2rem .5rem; }
-  #hint { position: fixed; top: 2.6rem; left: 0; right: 0; text-align: center; font-size: .9rem;
-    pointer-events: none; opacity: 0; transition: opacity .6s; }
-  #hint.show { opacity: .85; }
-  a.back, #gear, #bar, #start, #hint { z-index: 2; }
+  a.back { position: fixed; top: .6rem; left: .6rem; color: var(--fg); font-size: .85rem; opacity: .7; }
 </style>
 </head>
 <body>
 <a class="back" href="/">← accueil</a>
-<button id="gear" title="Réglages">⚙</button>
-<div id="hint">Tape une surface plane : une onde s'y propage</div>
 
 <div id="stage"><canvas id="out"></canvas></div>
 <video id="video" playsinline muted autoplay></video>
@@ -45,8 +35,7 @@
 
 <div id="start">
   <h1>ASCII CAM</h1>
-  <p>Transforme l'image de la caméra en caractères ASCII, en direct.<br>
-     Tape une surface pour y lancer une onde.<br>Rien ne quitte ton téléphone.</p>
+  <p>Transforme l'image de la caméra en caractères ASCII, en direct.<br>Rien ne quitte ton téléphone.</p>
   <button id="go">Activer la caméra</button>
   <p id="err"></p>
 </div>
@@ -56,13 +45,12 @@
   <label>cols <input id="cols" type="range" min="40" max="160" step="4" value="90"></label>
   <label><input id="color" type="checkbox"> couleur</label>
   <label><input id="invert" type="checkbox"> inverser</label>
-  <label><input id="showMask" type="checkbox"> masque</label>
   <button id="ramp">rampe</button>
   <button id="pause">pause</button>
   <button id="snap">📷 PNG</button>
+  <button id="hide">masquer</button>
 </div>
 
-<script src="vision.js"></script>
 <script>
 (() => {
   const RAMPS = [
@@ -71,67 +59,17 @@
     " ░▒▓█",
     " 01"
   ];
-  const $ = id => document.getElementById(id);
-  const video = $('video');
-  const sample = $('sample');
+  const video = document.getElementById('video');
+  const sample = document.getElementById('sample');
   const sctx = sample.getContext('2d', { willReadFrequently: true });
-  const out = $('out');
+  const out = document.getElementById('out');
   const octx = out.getContext('2d');
-  const ana = document.createElement('canvas');
-  const actx = ana.getContext('2d', { willReadFrequently: true });
+  const $ = id => document.getElementById(id);
 
   let facing = 'environment', stream = null, running = true;
-  let rampIdx = 0, cols = +$('cols').value, color = false, invert = false, showMask = false;
-
-  // Taille réelle d'un caractère : mesurée plutôt que supposée
+  let rampIdx = 0, cols = +$('cols').value, color = false, invert = false;
+  const CHAR_ASPECT = 0.55; // largeur/hauteur d'un caractère monospace
   const FONT_PX = 12;
-  const FONT = `${FONT_PX}px ui-monospace, Menlo, Consolas, monospace`;
-  octx.font = FONT;
-  const CW = octx.measureText('M').width || FONT_PX * 0.6;
-  const CH = FONT_PX;
-  const CHAR_ASPECT = CW / CH;
-
-  // ---- onde ----
-  const ANALYSIS_W = 160;    // résolution d'analyse (largeur en px)
-  const TRAVEL_S = 1.1;      // temps pour atteindre le point le plus éloigné
-  const RING_GAP_S = 0.22;   // écart entre deux anneaux
-  const RINGS = 3;
-  const RING_W = 0.045;      // largeur d'anneau (fraction de la taille de l'objet)
-  const WAVE_S = TRAVEL_S + RING_GAP_S * (RINGS - 1) + 0.5;
-  const MAX_WAVES = 4;
-  let waves = [];
-
-  function waveIntensity(dn, t) {
-    let I = 0;
-    for (let k = 0; k < RINGS; k++) {
-      const r = (t - k * RING_GAP_S) / TRAVEL_S;
-      if (r < 0) continue;
-      const x = (dn - r) / RING_W;
-      I += Math.exp(-x * x) * (1 - k * 0.25);
-    }
-    const fade = t < TRAVEL_S ? 1 : Math.max(0, 1 - (t - TRAVEL_S) / (WAVE_S - TRAVEL_S));
-    I *= fade * (1 - 0.35 * Math.min(1, dn));
-    if (t < 0.35) I += 0.3 * (1 - t / 0.35);        // flash de sélection
-    if (showMask) I += 0.18 * fade;
-    return Math.min(1, I);
-  }
-
-  function launchWave(nx, ny) {
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw) return;
-    const aw = ANALYSIS_W, ah = Math.round(ANALYSIS_W * vh / vw);
-    if (ana.width !== aw || ana.height !== ah) { ana.width = aw; ana.height = ah; }
-    actx.save();
-    if (facing === 'user') { actx.translate(aw, 0); actx.scale(-1, 1); }
-    actx.drawImage(video, 0, 0, aw, ah);
-    actx.restore();
-    const img = actx.getImageData(0, 0, aw, ah);
-    const r = Vision.analyze(img, nx * aw, ny * ah);
-    r.t0 = performance.now();
-    waves.push(r);
-    if (waves.length > MAX_WAVES) waves.shift();
-    window.__lastWave = r; // debug
-  }
 
   async function startCam() {
     if (stream) stream.getTracks().forEach(t => t.stop());
@@ -146,76 +84,58 @@
     await video.play();
   }
 
-  const fgColor = () => getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
-  const HI = [230, 255, 255]; // couleur de crête de l'onde
-
   function frame() {
     requestAnimationFrame(frame);
-    if (video.readyState < 2) return;
-    const now = performance.now();
-    waves = waves.filter(w => (now - w.t0) / 1000 < WAVE_S);
-    if (!running && !waves.length) return;
+    if (!running || video.readyState < 2) return;
 
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw) return;
     const rows = Math.max(1, Math.round(cols * (vh / vw) * CHAR_ASPECT));
-    if (running) {
-      if (sample.width !== cols || sample.height !== rows) { sample.width = cols; sample.height = rows; }
-      sctx.save();
-      if (facing === 'user') { sctx.translate(cols, 0); sctx.scale(-1, 1); }
-      sctx.drawImage(video, 0, 0, cols, rows);
-      sctx.restore();
-    }
-    const px = sctx.getImageData(0, 0, sample.width, sample.height).data;
+    if (sample.width !== cols || sample.height !== rows) { sample.width = cols; sample.height = rows; }
 
-    const W = Math.ceil(cols * CW), H = rows * CH;
-    if (out.width !== W || out.height !== H) { out.width = W; out.height = H; fit(); }
+    // Miroir pour la caméra frontale
+    sctx.save();
+    if (facing === 'user') { sctx.translate(cols, 0); sctx.scale(-1, 1); }
+    sctx.drawImage(video, 0, 0, cols, rows);
+    sctx.restore();
+    const px = sctx.getImageData(0, 0, cols, rows).data;
+
+    const cw = FONT_PX * CHAR_ASPECT, ch = FONT_PX;
+    const W = Math.ceil(cols * cw), H = rows * ch;
+    if (out.width !== W || out.height !== H) {
+      out.width = W; out.height = H;
+      fit();
+    }
     octx.fillStyle = '#000';
     octx.fillRect(0, 0, W, H);
-    octx.font = FONT;
+    octx.font = `${FONT_PX}px ui-monospace, Menlo, Consolas, monospace`;
     octx.textBaseline = 'top';
 
     const ramp = RAMPS[rampIdx], n = ramp.length - 1;
-    const fg = fgColor();
-    const fgRGB = [0x33, 0xff, 0x66];
-    const tw = waves.map(w => (now - w.t0) / 1000);
+    const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+    if (!color) octx.fillStyle = fg;
 
     for (let y = 0; y < rows; y++) {
-      let line = '';
-      const hi = []; // [x, char, I, r, g, b]
-      for (let x = 0; x < cols; x++) {
-        const i = (y * cols + x) * 4;
-        const r = px[i], g = px[i + 1], b = px[i + 2];
-        let l = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        if (invert) l = 1 - l;
-
-        let I = 0;
-        for (let k = 0; k < waves.length; k++) {
-          const wv = waves[k];
-          const ax = Math.min(wv.w - 1, ((x + 0.5) / cols * wv.w) | 0);
-          const ay = Math.min(wv.h - 1, ((y + 0.5) / rows * wv.h) | 0);
-          const dn = wv.dist[ay * wv.w + ax];
-          if (dn >= 0) I = Math.max(I, waveIntensity(dn, tw[k]));
-        }
-
-        if (I > 0.03) {
-          const c = ramp[Math.max(1, Math.round(Math.min(1, l + I * 0.9) * n))];
-          hi.push([x, c, I, r, g, b]);
-          line += ' ';
-        } else if (color) {
-          const c = ramp[Math.round(l * n)];
-          if (c !== ' ') hi.push([x, c, 0, r, g, b]);
-          line += ' ';
-        } else {
+      if (!color) {
+        let line = '';
+        for (let x = 0; x < cols; x++) {
+          const i = (y * cols + x) * 4;
+          let l = (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
+          if (invert) l = 1 - l;
           line += ramp[Math.round(l * n)];
         }
-      }
-      if (!color) { octx.fillStyle = fg; octx.fillText(line, 0, y * CH); }
-      for (const [x, c, I, r, g, b] of hi) {
-        const base = color ? [r, g, b] : fgRGB;
-        const m = Math.min(1, I * 1.2);
-        octx.fillStyle = `rgb(${base[0] + (HI[0] - base[0]) * m | 0},${base[1] + (HI[1] - base[1]) * m | 0},${base[2] + (HI[2] - base[2]) * m | 0})`;
-        octx.fillText(c, x * CW, y * CH);
+        octx.fillText(line, 0, y * ch);
+      } else {
+        for (let x = 0; x < cols; x++) {
+          const i = (y * cols + x) * 4;
+          const r = px[i], g = px[i + 1], b = px[i + 2];
+          let l = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          if (invert) l = 1 - l;
+          const c = ramp[Math.round(l * n)];
+          if (c === ' ') continue;
+          octx.fillStyle = `rgb(${r},${g},${b})`;
+          octx.fillText(c, x * cw, y * ch);
+        }
       }
     }
   }
@@ -227,23 +147,12 @@
   }
   window.addEventListener('resize', fit);
 
-  out.addEventListener('pointerdown', e => {
-    const rect = out.getBoundingClientRect();
-    const nx = (e.clientX - rect.left) / rect.width;
-    const ny = (e.clientY - rect.top) / rect.height;
-    if (nx < 0 || ny < 0 || nx > 1 || ny > 1) return;
-    launchWave(nx, ny);
-  });
-
   $('go').onclick = async () => {
     $('err').textContent = '';
     try {
       await startCam();
       $('start').style.display = 'none';
       $('bar').style.display = 'flex';
-      $('gear').style.display = 'block';
-      $('hint').classList.add('show');
-      setTimeout(() => $('hint').classList.remove('show'), 4000);
       requestAnimationFrame(frame);
     } catch (e) {
       $('err').textContent = e.name === 'NotAllowedError'
@@ -253,13 +162,11 @@
   };
   $('flip').onclick = async () => {
     facing = facing === 'environment' ? 'user' : 'environment';
-    waves = [];
-    try { await startCam(); } catch (e) { $('hint').textContent = e.message; $('hint').classList.add('show'); }
+    try { await startCam(); } catch (e) { alert(e.message); }
   };
   $('cols').oninput = e => cols = +e.target.value;
   $('color').onchange = e => color = e.target.checked;
   $('invert').onchange = e => invert = e.target.checked;
-  $('showMask').onchange = e => showMask = e.target.checked;
   $('ramp').onclick = () => rampIdx = (rampIdx + 1) % RAMPS.length;
   $('pause').onclick = e => { running = !running; e.target.textContent = running ? 'pause' : 'reprendre'; };
   $('snap').onclick = () => {
@@ -268,7 +175,10 @@
     a.href = out.toDataURL('image/png');
     a.click();
   };
-  $('gear').onclick = () => $('bar').classList.toggle('hidden');
+  $('hide').onclick = () => {
+    $('bar').classList.add('hidden');
+    setTimeout(() => out.addEventListener('click', () => $('bar').classList.remove('hidden'), { once: true }), 0);
+  };
 })();
 </script>
 </body>
