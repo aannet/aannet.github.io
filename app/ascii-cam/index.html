@@ -24,6 +24,7 @@
   #bar input[type=range] { width: 7rem; vertical-align: middle; accent-color: var(--fg); }
   #bar.hidden { display: none !important; }
   a.back { position: fixed; top: .6rem; left: .6rem; color: var(--fg); font-size: .85rem; opacity: .7; }
+  a.back, #bar, #start { z-index: 2; }
 </style>
 </head>
 <body>
@@ -68,8 +69,12 @@
 
   let facing = 'environment', stream = null, running = true;
   let rampIdx = 0, cols = +$('cols').value, color = false, invert = false;
-  const CHAR_ASPECT = 0.55; // largeur/hauteur d'un caractère monospace
+  // Largeur réelle d'un caractère : mesurée plutôt que supposée
   const FONT_PX = 12;
+  const FONT = `${FONT_PX}px ui-monospace, Menlo, Consolas, monospace`;
+  octx.font = FONT;
+  const CHAR_W = octx.measureText('M').width || FONT_PX * 0.6;
+  const CHAR_ASPECT = CHAR_W / FONT_PX;
 
   async function startCam() {
     if (stream) stream.getTracks().forEach(t => t.stop());
@@ -100,7 +105,7 @@
     sctx.restore();
     const px = sctx.getImageData(0, 0, cols, rows).data;
 
-    const cw = FONT_PX * CHAR_ASPECT, ch = FONT_PX;
+    const cw = CHAR_W, ch = FONT_PX;
     const W = Math.ceil(cols * cw), H = rows * ch;
     if (out.width !== W || out.height !== H) {
       out.width = W; out.height = H;
@@ -108,7 +113,7 @@
     }
     octx.fillStyle = '#000';
     octx.fillRect(0, 0, W, H);
-    octx.font = `${FONT_PX}px ui-monospace, Menlo, Consolas, monospace`;
+    octx.font = FONT;
     octx.textBaseline = 'top';
 
     const ramp = RAMPS[rampIdx], n = ramp.length - 1;
