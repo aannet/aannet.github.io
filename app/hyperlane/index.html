@@ -19,6 +19,10 @@ html,body{margin:0;height:100%;background:#0b0221;overflow:hidden;touch-action:n
 #spd .u{font-size:11px;opacity:.8;margin-left:4px}
 #bar{width:180px;height:6px;border:1px solid #ff2bd6;margin:2px auto 0;box-shadow:0 0 8px #ff2bd6}
 #bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#00e5ff,#ff2bd6)}
+#split{top:calc(max(10px,env(safe-area-inset-top)) + 70px);left:max(14px,env(safe-area-inset-left));font-size:24px;font-weight:700;text-shadow:none}
+#drift{font-size:13px;letter-spacing:4px;opacity:0;transition:opacity .1s;color:#7df9ff;text-shadow:0 0 8px #00e5ff}
+#drift.on{opacity:1}
+#drift.hot{color:#ff7be8;text-shadow:0 0 10px #ff2bd6}
 .pad{position:fixed;bottom:max(18px,env(safe-area-inset-bottom));width:62px;height:62px;border:2px solid rgba(125,249,255,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;color:rgba(125,249,255,.45);pointer-events:none;transition:all .08s}
 #pl{left:max(22px,env(safe-area-inset-left))}
 #pr{right:max(22px,env(safe-area-inset-right))}
@@ -49,8 +53,9 @@ html,body{margin:0;height:100%;background:#0b0221;overflow:hidden;touch-action:n
 
 <div id="tl" class="hud">TOUR <b id="lap">1/3</b><br>TEMPS <span id="time">0:00.000</span><br>RECORD TOUR <span id="best">--</span></div>
 <canvas id="map" width="220" height="220"></canvas>
-<div id="tools"><button id="bfx">FX ON</button><button id="bsnd">SON ON</button></div>
-<div id="spd" class="hud"><span class="n" id="kmh">0</span><span class="u">KM/H</span><div id="bar"><i id="barf"></i></div></div>
+<div id="split" class="hud"></div>
+<div id="tools"><button id="bfx">FX ON</button><button id="bsnd">SON ON</button><button id="bvib">VIB ON</button></div>
+<div id="spd" class="hud"><div id="drift">DRIFT</div><span class="n" id="kmh">0</span><span class="u">KM/H</span><div id="bar"><i id="barf"></i></div></div>
 <div class="pad" id="pl">◀</div><div class="pad" id="pr">▶</div>
 <div id="big"></div>
 
@@ -58,7 +63,7 @@ html,body{margin:0;height:100%;background:#0b0221;overflow:hidden;touch-action:n
   <h1>HYPERLANE</h1>
   <p>Contre-la-montre · 3 tours</p>
   <p>Touche à gauche / à droite de l'écran pour tourner</p>
-  <p>Deux pouces en même temps = frein · plaques à chevrons = boost</p>
+  <p>Deux pouces = frein · chevrons = boost · garde un côté appuyé dans un virage serré pour drifter, relâche pour un mini-boost</p>
   <p class="rec" id="menuRec"></p>
   <div class="btn">TOUCHE POUR DÉMARRER</div>
 </div>
@@ -106,15 +111,21 @@ composer.addPass(new OutputPass());
 let fx = true;
 
 // ---------- Piste ----------
+const LOOP_R = 45, LOOP_CZ = -170, LOOP_SHIFT = 40;
+const loopPts = [];
+for (let i = 1; i < 12; i++) {
+  const th = i / 12 * Math.PI * 2;
+  loopPts.push([LOOP_SHIFT * i / 12, LOOP_R - LOOP_R * Math.cos(th), LOOP_CZ - LOOP_R * Math.sin(th)]);
+}
 const CTRL = [
-  [0,0,0],[0,0,-300],[40,10,-500],[180,30,-620],[360,40,-600],[480,20,-480],[500,0,-300],
+  [0,0,0],[0,0,-80],[0,0,LOOP_CZ],...loopPts,[LOOP_SHIFT,0,LOOP_CZ],[LOOP_SHIFT,0,-290],[55,10,-500],[180,30,-620],[360,40,-600],[480,20,-480],[500,0,-300],
   [420,-10,-160],[300,0,-80],[260,20,40],[320,50,180],[460,60,260],[560,40,400],[520,10,560],
   [360,0,620],[160,-10,600],[20,0,520],[-120,20,420],[-260,40,440],[-380,30,320],[-360,10,160],
   [-200,0,80],[-60,0,60]
 ].map(p => new V3(p[0], p[1], p[2]));
 const curve = new THREE.CatmullRomCurve3(CTRL, true, 'centripetal');
 const L = curve.getLength();
-const N = 1600, DS = L / N;
+const N = 1800, DS = L / N;
 const P = [], T = [], R = [], U = [], R0 = [];
 const K = new Float32Array(N);
 const up0 = new V3(0, 1, 0);
@@ -122,10 +133,20 @@ for (let i = 0; i < N; i++) {
   P.push(curve.getPointAt(i / N));
   T.push(curve.getTangentAt(i / N).normalize());
 }
-for (let i = 0; i < N; i++) R0.push(new V3().crossVectors(T[i], up0).normalize());
+// zone du looping : repère par transport parallèle (le "haut du monde" n'a plus de sens)
+let LZ0 = -1, LZ1 = -1;
+for (let i = 0; i < Math.floor(N * 0.25); i++) if (Math.abs(T[i].y) > 0.35) { if (LZ0 < 0) LZ0 = i; LZ1 = i; }
+LZ0 = Math.max(1, LZ0 - 40); LZ1 = Math.min(N - 2, LZ1 + 40);
+const inLoop = i => i >= LZ0 && i <= LZ1;
+for (let i = 0; i < N; i++) {
+  const v = new V3().crossVectors(T[i], up0);
+  if (v.lengthSq() < 1e-6) v.copy(i ? R0[i - 1] : new V3(1, 0, 0));
+  R0.push(v.normalize());
+}
 // courbure signée (>0 = virage à droite)
 let raw = new Float32Array(N);
 for (let i = 0; i < N; i++) {
+  if (inLoop(i)) { raw[i] = 0; continue; }
   const a = T[(i + 1) % N], b = T[(i - 1 + N) % N];
   raw[i] = ((a.x - b.x) * R0[i].x + (a.y - b.y) * R0[i].y + (a.z - b.z) * R0[i].z) / (2 * DS);
 }
@@ -139,6 +160,7 @@ for (let pass = 0; pass < 2; pass++) {
   raw = out;
 }
 K.set(raw);
+for (let i = LZ0; i <= LZ1; i++) K[i] = 0;
 let KMAX = 1e-6;
 const q = new THREE.Quaternion();
 for (let i = 0; i < N; i++) {
@@ -148,6 +170,23 @@ for (let i = 0; i < N; i++) {
   R.push(r);
   U.push(new V3().crossVectors(r, T[i]).normalize());
   KMAX = Math.max(KMAX, Math.abs(K[i]));
+}
+{
+  for (let i = LZ0; i <= LZ1; i++) {
+    q.setFromUnitVectors(T[i - 1], T[i]);
+    const r = R[i - 1].clone().applyQuaternion(q);
+    R[i] = r.addScaledVector(T[i], -r.dot(T[i])).normalize();
+  }
+  // corrige la torsion résiduelle pour raccorder proprement à la sortie
+  const e = LZ1 + 1;
+  q.setFromUnitVectors(T[LZ1], T[e]);
+  const rEnd = R[LZ1].clone().applyQuaternion(q);
+  const ang = Math.atan2(new V3().crossVectors(rEnd, R[e]).dot(T[e]), rEnd.dot(R[e]));
+  for (let i = LZ0; i <= LZ1; i++) {
+    q.setFromAxisAngle(T[i], ang * (i - LZ0 + 1) / (LZ1 - LZ0 + 2));
+    R[i].applyQuaternion(q).normalize();
+    U[i] = new V3().crossVectors(R[i], T[i]).normalize();
+  }
 }
 const CF = 0.5 * LAT / (KMAX * VMAX * VMAX);
 
@@ -283,10 +322,13 @@ const padTex = canvasTex(128, 256, (g, w, h) => {
   g.shadowColor = '#00e5ff'; g.shadowBlur = 10;
   for (const y of [70, 190]) { g.beginPath(); g.moveTo(14, y + 44); g.lineTo(64, y); g.lineTo(114, y + 44); g.stroke(); }
 });
-const PADS = [[0.05, 0], [0.3, -5], [0.52, 5], [0.74, 0], [0.9, -4]].map(([fr, x]) => ({ s: fr * L, x, len: 18, w: 9 }));
+const PADS = [[45 / L, 0], [0.3, -5], [0.52, 5], [0.74, 0], [0.9, -4]].map(([fr, x]) => ({ s: fr * L, x, len: 18, w: 9 }));
+const CPS = [0.25, 0.5, 0.75].map(f => f * L);
 {
   const mat = new THREE.MeshBasicMaterial({ map: padTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
   for (const p of PADS) scene.add(new THREE.Mesh(stripGeo(p.s, p.len, 8, p.x - p.w / 2, 0.05, p.x + p.w / 2, 0.05, p.len / 2), mat));
+  const cpMat = new THREE.MeshBasicMaterial({ color: 0xffe86b, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  for (const s of CPS) scene.add(new THREE.Mesh(stripGeo(s - .6, 1.2, 2, -HALF, .04, HALF, .04, 1), cpMat));
 }
 
 // ---------- Décor ----------
@@ -371,13 +413,20 @@ scene.add(ship.g);
 // ---------- Particules ----------
 const SPK = 90;
 const spkPos = new Float32Array(SPK * 3).fill(-9999), spkVel = new Float32Array(SPK * 3), spkLife = new Float32Array(SPK);
-const spkGeo = new THREE.BufferGeometry(); spkGeo.setAttribute('position', new THREE.BufferAttribute(spkPos, 3));
-scene.add(new THREE.Points(spkGeo, new THREE.PointsMaterial({ color: 0xffd36b, size: .7, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
+const spkCol = new Float32Array(SPK * 3);
+const spkGeo = new THREE.BufferGeometry();
+spkGeo.setAttribute('position', new THREE.BufferAttribute(spkPos, 3));
+spkGeo.setAttribute('color', new THREE.BufferAttribute(spkCol, 3));
+const spkPts = new THREE.Points(spkGeo, new THREE.PointsMaterial({ vertexColors: true, size: .7, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+spkPts.frustumCulled = false;
+scene.add(spkPts);
 let spkNext = 0;
-function spawnSparks(p, t, u, v, n) {
+const SPARK_YEL = new THREE.Color(0xffd36b);
+function spawnSparks(p, t, u, v, n, col = SPARK_YEL) {
   for (let k = 0; k < n; k++) {
     const i = spkNext; spkNext = (spkNext + 1) % SPK;
     spkPos[i * 3] = p.x; spkPos[i * 3 + 1] = p.y; spkPos[i * 3 + 2] = p.z;
+    spkCol[i * 3] = col.r; spkCol[i * 3 + 1] = col.g; spkCol[i * 3 + 2] = col.b;
     spkVel[i * 3] = t.x * v * .3 + (Math.random() - .5) * 20 + u.x * Math.random() * 10;
     spkVel[i * 3 + 1] = t.y * v * .3 + (Math.random() - .5) * 20 + u.y * Math.random() * 10;
     spkVel[i * 3 + 2] = t.z * v * .3 + (Math.random() - .5) * 20 + u.z * Math.random() * 10;
@@ -393,6 +442,7 @@ function updateSparks(dt) {
     spkPos[i * 3] += spkVel[i * 3] * dt; spkPos[i * 3 + 1] += spkVel[i * 3 + 1] * dt; spkPos[i * 3 + 2] += spkVel[i * 3 + 2] * dt;
   }
   spkGeo.attributes.position.needsUpdate = true;
+  spkGeo.attributes.color.needsUpdate = true;
 }
 
 // Lignes de vitesse (espace caméra)
@@ -436,8 +486,21 @@ function initAudio() {
     eng = { o1, o2, f, g };
     noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const ns = ac.createBufferSource(); ns.buffer = noiseBuf; ns.loop = true;
+    const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 4;
+    const dg = ac.createGain(); dg.gain.value = 0;
+    ns.connect(bp).connect(dg).connect(master); ns.start();
+    eng.drift = dg; eng.driftF = bp;
   } catch (e) { ac = null; }
 }
+function driftSound(on, charge) {
+  if (!eng || !eng.drift) return;
+  const t = ac.currentTime;
+  eng.drift.gain.setTargetAtTime(on ? .09 : 0, t, .05);
+  eng.driftF.frequency.setTargetAtTime(1800 + Math.min(charge, 2) * 900, t, .1);
+}
+let vibOn = true;
+const vib = p => { if (!vibOn) return; try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
 function engineUpdate(v, boost, active) {
   if (!eng) return;
   const t = ac.currentTime, fr = 50 + v * 1.1 + boost * 40;
@@ -467,15 +530,28 @@ const sfx = {
   count: () => beep(440, .25, .35, 'square'),
   go: () => beep(880, .6, .35, 'square'),
   lap: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, .25, .25, 'triangle', i * .08)),
+  mini: big => { beep(big ? 520 : 400, .25, .18, 'sawtooth'); beep(big ? 1040 : 800, .3, .14, 'sawtooth', .06); },
+  split: good => beep(good ? 1320 : 330, .12, .15, 'square'),
 };
 
 // ---------- État ----------
-const STORE = 'hyperlane.best.v1';
-let best = { lap: null, total: null };
+const STORE = 'hyperlane.best.v2';
+let best = { lap: null, total: null, splits: null };
 try { best = Object.assign(best, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
 const saveBest = () => { try { localStorage.setItem(STORE, JSON.stringify(best)); } catch (e) {} };
 
-const st = { mode: 'menu', s: 6, x: 0, v: 100, lat: 0, steer: 0, raceT: 0, lapStart: 0, laps: [], count: 0, boost: 0, shake: 0, wallCD: 0, padCD: 0, msgT: 0, endT: 0 };
+const st = { mode: 'menu', s: 6, x: 0, v: 100, lat: 0, steer: 0, raceT: 0, lapStart: 0, laps: [], count: 0, boost: 0, shake: 0, wallCD: 0, padCD: 0, msgT: 0, endT: 0,
+  holdDir: 0, holdT: 0, drift: false, driftDir: 0, driftT: 0, yawVis: 0, curSplits: [], lapSplits: [], splitT: 0 };
+const DRIFT_COL = [new THREE.Color(0x7df9ff), new THREE.Color(0xff2bd6)];
+function showSplit(delta) {
+  const el = $('split');
+  const good = delta <= 0;
+  el.textContent = `${good ? '−' : '+'}${Math.abs(delta).toFixed(3)}`;
+  el.style.color = good ? '#5dff9b' : '#ff5d7a';
+  el.style.textShadow = `0 0 8px ${good ? '#00ff6a' : '#ff0040'}`;
+  st.splitT = 2;
+  sfx.split(good);
+}
 const input = { tl: false, tr: false, kl: false, kr: false, kb: false };
 
 function fmt(t) {
@@ -498,7 +574,8 @@ function startRace() {
     }
   } catch (e) {}
   $('menu').classList.add('hidden'); $('res').classList.add('hidden');
-  Object.assign(st, { mode: 'countdown', s: 6, x: 0, v: 0, lat: 0, steer: 0, raceT: 0, lapStart: 0, laps: [], count: 3.999, boost: 0, shake: 0, wallCD: 0, padCD: 0 });
+  Object.assign(st, { mode: 'countdown', s: 6, x: 0, v: 0, lat: 0, steer: 0, raceT: 0, lapStart: 0, laps: [], count: 3.999, boost: 0, shake: 0, wallCD: 0, padCD: 0,
+    holdDir: 0, holdT: 0, drift: false, driftT: 0, curSplits: [], lapSplits: [], splitT: 0 });
   perf.n = 0; perf.sum = 0; perf.done = false;
   lastCount = 4;
 }
@@ -510,7 +587,11 @@ function finishRace() {
   const bl = Math.min(...st.laps);
   const newTotal = !best.total || total < best.total, newLap = !best.lap || bl < best.lap;
   if (newTotal) best.total = total;
-  if (newLap) best.lap = bl;
+  if (newLap) {
+    best.lap = bl;
+    const sp = st.lapSplits[st.laps.indexOf(bl)];
+    best.splits = sp && sp.length === CPS.length ? sp : null;
+  }
   saveBest(); refreshMenuRec();
   $('resBody').innerHTML =
     `<p style="font-size:26px">${fmt(total)} ${newTotal ? '<span class="rec">★ RECORD</span>' : ''}</p>` +
@@ -546,6 +627,8 @@ addEventListener('keyup', e => {
 $('menu').addEventListener('click', startRace);
 $('res').addEventListener('click', () => { if (st.endT > 1.2) startRace(); });
 $('bfx').addEventListener('click', () => { fx = !fx; $('bfx').textContent = fx ? 'FX ON' : 'FX OFF'; });
+if (!('vibrate' in navigator)) $('bvib').classList.add('hidden');
+$('bvib').addEventListener('click', () => { vibOn = !vibOn; $('bvib').textContent = vibOn ? 'VIB ON' : 'VIB OFF'; if (vibOn) vib(40); });
 $('bsnd').addEventListener('click', () => {
   sound = !sound; $('bsnd').textContent = sound ? 'SON ON' : 'SON OFF';
   if (master) master.gain.value = sound ? .45 : 0;
@@ -608,8 +691,30 @@ function update(dt, rawDt) {
     if (brake) { steerIn = 0; st.v = Math.max(30, st.v - 90 * dt); }
     else if (st.v < VMAX) st.v = Math.min(VMAX, st.v + (25 + (VMAX - st.v) * .6) * dt);
     else st.v -= (st.v - VMAX) * .9 * dt;
+    // drift : tenir un côté dans un virage serré, relâcher pour un mini-boost
+    if (steerIn !== 0 && steerIn === st.holdDir) st.holdT += dt; else { st.holdDir = steerIn; st.holdT = 0; }
+    if (!st.drift && steerIn !== 0 && st.holdT > .3 && st.v > 110 && Math.abs(k) > .25 * KMAX && steerIn === Math.sign(k)) {
+      st.drift = true; st.driftDir = steerIn; st.driftT = 0; vib(25);
+    }
+    if (st.drift) {
+      if (steerIn !== st.driftDir) {
+        st.drift = false;
+        if (st.driftT > .8) {
+          const big = st.driftT > 1.6;
+          st.v = Math.min(st.v + (big ? 40 : 22), BOOSTMAX); st.boost = Math.max(st.boost, big ? .8 : .5);
+          sfx.mini(big); vib(big ? [40, 30, 60] : 50);
+        }
+      } else {
+        st.driftT += dt;
+        st.v = Math.max(90, st.v - 6 * dt);
+        const col = DRIFT_COL[st.driftT > 1.6 ? 1 : 0];
+        if (st.driftT > .8) spawnSparks(trackPos(st.s - 2, st.x - st.driftDir * 1.2, .4, sideP), Fs.t, Fs.u, -st.v * .5, 2, col);
+      }
+    }
     st.steer += (steerIn - st.steer) * Math.min(1, 12 * dt);
-    st.lat += (st.steer * LAT - st.lat) * Math.min(1, 10 * dt);
+    // en drift, le vaisseau suit la courbe et rentre doucement vers la corde
+    const latT = st.drift ? k * st.v * st.v * CF + st.driftDir * LAT * .25 : st.steer * LAT;
+    st.lat += (latT - st.lat) * Math.min(1, 10 * dt);
     if (!perf.done) {
       perf.n++; perf.sum += rawDt;
       if (perf.n >= 150) {
@@ -635,16 +740,32 @@ function update(dt, rawDt) {
   if (st.x < -lim) { st.x = -lim; if (st.lat < 0) st.lat *= -.4; touching = -1; }
   st.wallCD -= dt; st.padCD -= dt;
   if (touching && st.mode === 'race') {
-    if (st.wallCD <= 0 && st.v > 40) { st.v *= .88; st.wallCD = .35; st.shake = .6; sfx.hit(); spawnSparks(trackPos(st.s, st.x + touching * 2.2, .8, sideP), Fs.t, Fs.u, st.v, 14); }
+    st.drift = false;
+    if (st.wallCD <= 0 && st.v > 40) { st.v *= .88; st.wallCD = .35; st.shake = .6; sfx.hit(); vib(70); spawnSparks(trackPos(st.s, st.x + touching * 2.2, .8, sideP), Fs.t, Fs.u, st.v, 14); }
     else { st.v = Math.max(30, st.v - 25 * dt); if (Math.random() < .5) spawnSparks(trackPos(st.s, st.x + touching * 2.2, .8, sideP), Fs.t, Fs.u, st.v, 2); }
   }
 
+  const prevS = st.s;
   st.s += st.v * dt;
+  if (st.mode === 'race') {
+    CPS.forEach((cp, i) => {
+      if (prevS < cp && st.s >= cp) {
+        const t = st.raceT - st.lapStart;
+        st.curSplits[i] = t;
+        if (best.splits) showSplit(t - best.splits[i]);
+      }
+    });
+  }
   if (st.s >= L) {
     st.s -= L;
     if (st.mode === 'race') {
-      st.laps.push(st.raceT - st.lapStart);
+      const lt = st.raceT - st.lapStart;
+      st.laps.push(lt);
+      st.lapSplits.push(st.curSplits.slice());
+      st.curSplits = [];
       st.lapStart = st.raceT;
+      const prevBest = Math.min(best.lap ?? Infinity, ...st.laps.slice(0, -1));
+      if (isFinite(prevBest)) showSplit(lt - prevBest);
       sfx.lap();
       if (st.laps.length >= LAPS) finishRace();
       else flash(st.laps.length === LAPS - 1 ? 'DERNIER TOUR' : `TOUR ${st.laps.length + 1}`, 1.2);
@@ -655,7 +776,7 @@ function update(dt, rawDt) {
     for (const p of PADS) {
       const d = ((st.s - p.s) % L + L) % L;
       if (d < p.len && Math.abs(st.x - p.x) < p.w / 2) {
-        st.v = Math.min(st.v + 65, BOOSTMAX); st.boost = 1.2; st.padCD = .6; st.shake = Math.max(st.shake, .3); sfx.boost();
+        st.v = Math.min(st.v + 65, BOOSTMAX); st.boost = 1.2; st.padCD = .6; st.shake = Math.max(st.shake, .3); sfx.boost(); vib(60);
         break;
       }
     }
@@ -675,7 +796,10 @@ function update(dt, rawDt) {
   back.copy(Fs.t).negate();
   tmpM.makeBasis(Fs.r, Fs.u, back);
   ship.g.quaternion.setFromRotationMatrix(tmpM);
-  tmpQ.setFromEuler(tmpE.set(0, -st.steer * .18, -st.steer * .5));
+  if (st.mode !== 'race') st.drift = false;
+  const yawT = st.drift ? -st.driftDir * .5 : -st.steer * .18;
+  st.yawVis += (yawT - st.yawVis) * Math.min(1, 8 * dt);
+  tmpQ.setFromEuler(tmpE.set(0, st.yawVis, -st.steer * (st.drift ? .65 : .5)));
   ship.g.quaternion.multiply(tmpQ);
   const fl = .5 + st.v / VMAX * .7 + st.boost * 1.2 + Math.random() * .15;
   ship.flames.forEach((f, i) => { f.scale.z = (i % 2 ? .6 : 1) * fl; });
@@ -704,6 +828,10 @@ function update(dt, rawDt) {
   updateSparks(dt);
   updateSpeedLines(dt, st.v);
   engineUpdate(st.v, st.boost, st.mode === 'race');
+  driftSound(st.drift, st.driftT);
+  $('drift').classList.toggle('on', st.drift);
+  $('drift').classList.toggle('hot', st.drift && st.driftT > 1.6);
+  if (st.splitT > 0) { st.splitT -= dt; if (st.splitT <= 0) $('split').textContent = ''; }
 
   // HUD
   const lapN = Math.min(st.laps.length + 1, LAPS);
