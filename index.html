@@ -1,81 +1,50 @@
-<html>
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<title>AANNET GITHUB PAGE</title>
-		<link href="https://fonts.googleapis.com/css?family=Muli|Roboto&display=swap" rel="stylesheet">
-		<style>
-			html, html * {
-				font-family: 'Muli', sans-serif;
-			}
-			body {
-				margin: 0;
-				padding: 0;
-			}
-			.hero {
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aannet — lab</title>
+<meta name="description" content="Jeux et expériences web jouables sur mobile.">
+<style>
+:root{color-scheme:dark;--bg:#0b0b0c;--ink:#e8e6e1;--mute:#8a877f;--line:#24241f;--acc:#7cff9b}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:640px;margin:0 auto;padding:48px 20px 64px}
+h1{font-size:22px;font-weight:600;margin:0 0 4px;letter-spacing:.02em}
+.sub{color:var(--mute);margin:0 0 40px;font-size:14px}
+h2{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.14em;color:var(--mute);margin:40px 0 8px}
+ul{list-style:none;margin:0;padding:0}
+li a{display:flex;align-items:baseline;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);color:inherit;text-decoration:none}
+li:first-child a{border-top:1px solid var(--line)}
+li a:hover .t,li a:focus-visible .t{color:var(--acc)}
+.t{font-weight:600;white-space:nowrap;transition:color .15s}
+.d{color:var(--mute);font-size:14px;flex:1}
+.ar{color:var(--mute)}
+footer{margin-top:56px;font-size:13px;color:var(--mute)}
+footer a{color:var(--mute)}
+@media (max-width:480px){li a{flex-direction:column;gap:2px}.ar{display:none}}
+</style>
+</head>
+<body>
+<main>
+  <h1>aannet</h1>
+  <p class="sub">Jeux et expériences web, une page chacun, pensés pour le téléphone.</p>
 
-				/* Permalink - use to edit and share this gradient: https://colorzilla.com/gradient-editor/#606c88+0,3f4c6b+100;Grey+3D+%232 */
-				background: #606c88; /* Old browsers */
-				background: -moz-linear-gradient(top,  #606c88 0%, #3f4c6b 100%); /* FF3.6-15 */
-				background: -webkit-linear-gradient(top,  #606c88 0%,#3f4c6b 100%); /* Chrome10-25,Safari5.1-6 */
-				background: linear-gradient(to bottom,  #606c88 0%,#3f4c6b 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
-				filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#606c88', endColorstr='#3f4c6b',GradientType=0 ); /* IE6-9 */
+  <h2>Jeux</h2>
+  <ul>
+    <li><a href="app/hyperlane/"><span class="t">HYPERLANE</span><span class="d">Course anti-gravité néon, contre-la-montre 3 tours. En paysage.</span><span class="ar">→</span></a></li>
+    <li><a href="app/derriere-les-lignes/"><span class="t">Derrière les lignes</span><span class="d">Infiltration tactique façon Commandos, une mission complète au doigt.</span><span class="ar">→</span></a></li>
+    <li><a href="app/hors-champ/"><span class="t">Hors champ</span><span class="d">Survival horror isométrique, une lampe et ce qui rôde autour. Prototype.</span><span class="ar">→</span></a></li>
+  </ul>
 
-				color: #FFF;
-				text-transform: uppercase;
-				text-align: center;
-				padding: 2rem;
-			}
+  <h2>Expériences</h2>
+  <ul>
+    <li><a href="app/ascii-cam/"><span class="t">ASCII CAM</span><span class="d">La caméra convertie en caractères ASCII, en direct.</span><span class="ar">→</span></a></li>
+    <li><a href="app/t-vision/"><span class="t">T-VISION</span><span class="d">HUD d'analyse temps réel : filtre thermique, détection et suivi d'objets.</span><span class="ar">→</span></a></li>
+    <li><a href="app/matrix/"><span class="t">Matrix</span><span class="d">Pluie de caractères en PixiJS, première démo du lab.</span><span class="ar">→</span></a></li>
+  </ul>
 
-			.demo {
-				border-top: 1px dotted;
-				margin-top: 2rem;
-				padding: 1rem;
-			}
-		</style>
-
-	</head>
-	<body>
-		
-		<div class="hero">
-			<h1>Welcome to my account</h1>
-		</div>
-
-		<div class="demo">
-			<h2>ASCII CAM</h2>
-			<p>La caméra du téléphone convertie en caractères ASCII, en direct.</p>
-			<a href="app/ascii-cam/">Ouvrir ASCII CAM →</a>
-		</div>
-
-		<div class="demo">
-			<h2>T-VISION</h2>
-			<p>Vision d'analyse en temps réel : filtre thermique rouge, détection et suivi d'objets, silhouettes, HUD.</p>
-			<a href="app/t-vision/">Ouvrir T-VISION →</a>
-		</div>
-
-		<div class="demo">
-			<h2>HYPERLANE</h2>
-			<p>Course anti-gravité néon en Three.js : contre-la-montre 3 tours, à jouer en paysage sur téléphone.</p>
-			<a href="app/hyperlane/">Ouvrir HYPERLANE →</a>
-		</div>
-
-		<div class="demo">
-			<h2>DERRIÈRE LES LIGNES</h2>
-			<p>Infiltration tactique façon Commandos en Three.js : couteau, sniper, corps à cacher, une mission complète au doigt sur téléphone.</p>
-			<a href="app/derriere-les-lignes/">Ouvrir DERRIÈRE LES LIGNES →</a>
-		</div>
-
-		<div class="demo">
-			<h2>MATRIX PIXIE JS DEMO</h2>
-
-			<div >
-
-			<button id="btnCreate">CREATE</button>
-			<button id="btnAnimate">ANIMATE</button>
-			<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/4.5.1/pixi.min.js"></script>
-			<script src="app/matrix/app-include.js"></script>
-			<script src="app/matrix/app.js"></script>
-			</div>
-		</div>
-	</body>
+  <footer><a href="https://github.com/aannet">github.com/aannet</a></footer>
+</main>
+</body>
 </html>
