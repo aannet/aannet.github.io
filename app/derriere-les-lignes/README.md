@@ -6,7 +6,7 @@ Jeu d'infiltration tactique façon *Commandos: Behind Enemy Lines* (1998), jouab
 - Source : ce dossier, fichier `index.html`
 - Lien depuis la page d'accueil du dépôt : carte « DERRIÈRE LES LIGNES » dans `/index.html`
 
-Ce document sert à reprendre le projet plus tard, seul ou avec un LLM. La partie 9 s'adresse directement au LLM.
+Ce document sert à reprendre le projet plus tard, seul ou avec un LLM. La partie 10 s'adresse directement au LLM.
 
 ---
 
@@ -108,7 +108,7 @@ Le script est découpé par des commentaires `// ---------- nom ----------`. Ord
 **Machine à états des gardes** (`e.state`)
 `routine` (patrouille par waypoints ou sentinelle qui balaie) → `suspicious` (s'arrête, se tourne) → `investigate` (va voir un bruit, regarde autour 3,5 s) → `return` (revient au poste ou au waypoint le plus proche). `alert` (voit le commando : tire toutes les 1,1–1,6 s, poursuit s'il est à plus de 8 m) → `hunt` (cherche autour de la dernière position) → `return` quand l'alerte retombe. `dead`.
 
-**Ajouter un garde** : une entrée dans `ENEMIES`, soit sentinelle `{x, z, a, scan}` (scan = amplitude du balayage en radians), soit patrouille `{path: [[x,z], ...]}`. Les waypoints doivent être sur des cases libres (voir test partie 7).
+**Ajouter un garde** : une entrée dans `ENEMIES`, soit sentinelle `{x, z, a, scan}` (scan = amplitude du balayage en radians), soit patrouille `{path: [[x,z], ...]}`. Les waypoints doivent être sur des cases libres (voir test partie 8).
 
 **Tirs ennemis** : probabilité 0,2–0,7 selon la distance (−0,12 si le commando rampe), portée 12 m. **Invariant à garder** : portée du pistolet (15) > portée de tir ennemie (12) > portée de vue en alerte (12). Sinon le joueur se fait tirer dessus sans pouvoir répondre (bug déjà corrigé une fois).
 
@@ -127,7 +127,73 @@ Choisie après comparaison de plusieurs pistes (diorama doré, toon, nuit, hiver
 
 Décisions écartées et pourquoi : sprites pré-rendus (rotation saccadée, artefacts au zoom, la géométrie des persos n'est pas le goulot de perf) ; tilt-shift (rendu « jouet », contraire au ton adulte voulu).
 
-## 7. Tester
+## 7. Contraintes non fonctionnelles (NFR)
+
+Chiffres mesurés le 22/11/2026 sur la version publiée, sauf mention « cible ».
+
+**Performance**
+
+| Exigence | Valeur |
+|---|---|
+| Fluidité (cible) | 60 fps sur un téléphone récent, 30 fps minimum sur un milieu de gamme de 3 ans (qualité basse automatique) |
+| Draw calls par frame | 68 mesurés (scène complète, 11 gardes). Plafond à ne pas dépasser : ~120 |
+| Triangles par frame | ~265 000 mesurés, dont l'essentiel dans le mesh statique fusionné. Plafond : ~400 000 |
+| Programmes shader | 9. Chaque nouveau type de matériau en ajoute un : réutiliser les matériaux existants |
+| Ombres | Carte 2048², calculée une fois. Aucune ombre dynamique par frame (règle dure) |
+| Lumières dynamiques | 1 directionnelle + 1 hémisphère en permanence. Une PointLight seulement le temps de l'explosion (0,8 s) |
+| Pas de temps | `dt` plafonné à 0,05 s : le jeu ralentit plutôt que de sauter si le téléphone rame |
+| Résolution | `devicePixelRatio` plafonné à 1,75 (1,1 en qualité basse) |
+| Qualité adaptative | Bascule en qualité basse si la moyenne des 150 premières frames dépasse 1/42 s |
+
+**Chargement et poids**
+
+| Exigence | Valeur |
+|---|---|
+| Fichier `index.html` | 94 Ko. Plafond conseillé : 150 Ko, au-delà la relecture complète par un LLM devient coûteuse |
+| Dépendances réseau | Three.js 0.160 (~1,3 Mo non compressé, ~300 Ko gzip, mis en cache par le CDN), `BufferGeometryUtils`, 2 polices Google. Rien d'autre |
+| Génération au démarrage | Textures canvas (sol 2048², 4 textures de matériaux, nuages), fusion de géométrie, carte d'ombres : quelques centaines de ms sur téléphone (cible < 1,5 s avant l'écran d'intro jouable) |
+| Mémoire | ~40 Mo de tas JS mesurés. Côté GPU, environ 40 Mo dominés par la texture du sol (2048² + mipmaps) et la carte d'ombres. Cible : rester sous 150 Mo au total |
+
+**Compatibilité**
+
+| Exigence | Valeur |
+|---|---|
+| Navigateurs | Chrome Android récent, Safari iOS 16+ (`CanvasRenderingContext2D.roundRect`, import maps, modules ES), Chrome/Firefox/Safari desktop |
+| WebGL | WebGL 2 (Three.js r160). Pas de repli WebGL 1 |
+| Écran | Pensé pour le portrait, 360 px de large minimum (la barre de 6 boutons tient en 361 px). Paysage et desktop fonctionnent, sans mise en page dédiée |
+| Encoches | Marges `env(safe-area-inset-*)` sur le HUD, la barre et la lunette |
+| Entrées | Tactile (tap, double-tap, glisser, pincer) et souris (clic, glisser, molette). Pas de clavier ni de manette |
+| Hors ligne | Non : il faut le CDN au premier chargement. Pas de service worker |
+
+**Ergonomie et accessibilité**
+
+- Cibles tactiles d'au moins 48 px (boutons d'action 56 × 62 px, Centrer 48 px, Tirer 96 × 76 px).
+- Tolérance de sélection d'un personnage au tap : 58 px autour des pieds, du torse et de la tête.
+- Chaque information de gameplay est doublée en forme ou en texte en plus de la couleur : « ? » / « ! » au-dessus des gardes, messages toast, bandeau ALERTE, texte dans la lunette. Les anneaux des corps et les cônes reposent sur la couleur seule (dette connue pour les daltoniens).
+- Retour haptique `navigator.vibrate` quand le commando est touché, s'il est disponible.
+- Langue : français uniquement, chaînes en dur dans le code.
+- Pas de gestion de `prefers-reduced-motion` dans le jeu (grain animé, secousses de caméra) : dette connue.
+
+**Robustesse**
+
+- L'audio échoue silencieusement si WebAudio est indisponible ou bloqué.
+- `localStorage`, `fetch`, `alert` ne sont pas utilisés : compatible avec les iframes sandboxées (artifact claude.ai).
+- La carte est déterministe (`rng` à graine fixe 11) : même disposition à chaque partie. Le gameplay (tirs, hésitations) utilise `Math.random`.
+- Toute modification de la carte doit garder l'accessibilité de tous les points clés (test de la partie 8).
+
+**Sécurité et vie privée**
+
+- Aucune donnée collectée, aucun compte, aucun cookie, aucun stockage local.
+- Seules requêtes sortantes : `cdn.jsdelivr.net` (Three.js) et Google Fonts. Remplacer les polices par des polices système supprime l'appel à Google si besoin.
+- Pas d'accès caméra, micro ni localisation.
+
+**Maintenabilité**
+
+- Un seul fichier, sans build ni dépendance npm à l'exécution, versions figées (Three.js 0.160.0) : le jeu doit tourner tel quel dans plusieurs années tant que le CDN sert cette version.
+- Code compact mais découpé en sections commentées. Toute nouvelle fonctionnalité va dans la section correspondante plutôt qu'en fin de fichier.
+- Le README est à mettre à jour à chaque changement de mécanique, de constante clé ou de convention.
+
+## 8. Tester
 
 Pas de tests unitaires. La méthode utilisée pendant le développement : un navigateur headless qui charge le fichier, avec les dépendances servies en local.
 
@@ -160,11 +226,13 @@ window.__g={cam,camTarget,findPath,walk,get P(){return P},get enemies(){return e
 
 Ne jamais laisser ce hook dans `index.html` publié.
 
+**Mesurer les budgets NFR** : ajouter `window.__r=renderer;` dans la même copie, puis lire `__r.info.render.calls`, `__r.info.render.triangles` et `__r.info.programs.length` après quelques secondes de jeu.
+
 **Vérifications à refaire après toute modif de la carte** : depuis le départ `(3.5, 44.5)`, `findPath` doit trouver un chemin vers chaque waypoint de chaque garde, la brèche `(21.5, 13.5)`, le portail `(31.5, 25.5)`, le devant du dépôt `(38.5, 9.8)` et l'extraction `(41.5, 44.5)`.
 
 Le rendu swiftshader est lent (quelques fps) : le temps de jeu avance moins vite que le temps réel. Utiliser `waitForFunction` sur un état plutôt que des délais fixes.
 
-## 8. Limites connues et pistes
+## 9. Limites connues et pistes
 
 - Les gardes ne se gênent pas entre eux ni avec le commando (pas de collision entre personnages).
 - Pas de sauvegarde, une seule mission.
@@ -172,7 +240,7 @@ Le rendu swiftshader est lent (quelques fps) : le temps de jeu avance moins vite
 - Le passage de la qualité haute à basse est définitif pendant la session.
 - Idées déjà évoquées avec le propriétaire : traîner un corps accroupi (plus lent, plus discret) ; mission d'hiver de nuit avec projecteur de mirador comme second type de cône mobile (lookdev réalisé) ; éclaircir la forêt de départ ; alléger les cônes rouges en alerte ; ajuster la fenêtre « par derrière » du couteau.
 
-## 9. Instructions pour un LLM qui reprend le projet
+## 10. Instructions pour un LLM qui reprend le projet
 
 1. **Lis ce document, puis le fichier entier** avant de modifier. Le code est compact (une ligne peut contenir plusieurs instructions). Repère-toi aux commentaires de section.
 2. **Garde le format** : un seul fichier HTML, Three.js 0.160 en importmap, pas de build, pas d'asset externe, pas de framework. Le propriétaire publie sur GitHub Pages et parfois en artifact claude.ai.
@@ -181,7 +249,7 @@ Le rendu swiftshader est lent (quelques fps) : le temps de jeu avance moins vite
    python3 -c "s=open('index.html').read();i=s.index('<script type=\"module\">')+22;j=s.index('</script>',i);open('/tmp/m.mjs','w').write(s[i:j])" && node --check /tmp/m.mjs
    ```
 4. **Respecte les conventions de la partie 4**, surtout les signes des rotations du rig, `addS` avant la fusion, `mark()` pour tout obstacle, et `shadowMap.needsUpdate` quand le décor statique change.
-5. **Après chaque changement** : vérification syntaxique, test headless (zéro erreur `pageerror`), test d'accessibilité des chemins si la carte a bougé, capture d'écran pour juger le visuel. Regarde les captures avant d'annoncer que c'est réussi.
+5. **Après chaque changement** : respect des budgets NFR de la partie 7, vérification syntaxique, test headless (zéro erreur `pageerror`), test d'accessibilité des chemins si la carte a bougé, capture d'écran pour juger le visuel. Regarde les captures avant d'annoncer que c'est réussi.
 6. **Performance mobile** : préfère cuire au chargement (textures canvas, ombres, fusion de géométrie) plutôt que calculer à chaque frame. Évite les filtres plein écran et les post-process WebGL. Une nouvelle lumière dynamique coûte cher.
 7. **Préférences du propriétaire** : réponses en français, directes, sans remplissage. Il aime qu'on lui propose 2–3 options argumentées avant un gros chantier visuel, et qu'on chiffre la probabilité que la solution lui convienne. Il teste sur son téléphone.
 8. **Déploiement** : copier le fichier dans `app/derriere-les-lignes/index.html` du dépôt `aannet/aannet.github.io`, commit sur `master` (c'est la branche publiée par GitHub Pages), push. Mettre à jour la carte de la page d'accueil si la description change.
