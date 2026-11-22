@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Hors champ</title>
+<!-- Sons de créature : CC0 1.0 (OpenGameArt) — "Evil Screech 1" par Nocturnal_Vanguard, "Monster snarls" par Darsycho,
+     "16 Monster Growls" par StarNinjas, "80 CC0 creature SFX #2" par rubberduck. Découpes via le dépôt shing1Sks/mimic.
+     Personnages : CC0 1.0, Quaternius — « Animated Men Characters » (Male_LongSleeve) et « Zombie Animated », convertis et allégés.
+     Architecture : js/main.js (jeu), render, world (niveau + requêtes), props (catalogue), themes, actors, audio, hud, levels/. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+/* VOICE: rapport de police retrouvé dans un bâtiment abandonné, sec, inquiet
+   IDEA: une maquette d'asile vue du dessus, éclairée par une seule lampe
+   PICTURE: le jeu plein écran, letterbox, grain, rouge comme seul accent
+   COLOUR and TYPE: noir, gris béton, rouge sang #c3121b · Special Elite (machine à écrire)
+   LAYOUT: canvas plein écran, HUD discret sous la bande haute, écrans titre centrés */
+:root{color-scheme:dark;--ink:#d8d4cc;--mute:#9b958c;--red:#c3121b}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;background:#000;color:var(--ink);overflow:hidden;font:16px/1.5 system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#c{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none}
+.tw{font-family:'Special Elite','Courier New',monospace}
+#hud{position:fixed;left:16px;top:calc(7vh + 10px);display:flex;align-items:center;gap:8px;font-size:14px;color:rgba(255,255,255,.72);pointer-events:none;opacity:0;transition:opacity 1s,color .3s}
+#hud svg{width:22px;height:22px}
+#hud svg path{stroke:currentColor}
+#hud.on{opacity:1}
+#hud.got{color:rgba(255,255,255,.95)}
+#hud.hi,#hud.hi.got{color:#ff4b4b}
+#bat{position:fixed;left:16px;top:calc(7vh + 40px);display:flex;align-items:center;gap:8px;font:13px 'Share Tech Mono',monospace;color:rgba(255,255,255,.72);pointer-events:none;opacity:0;transition:opacity 1s,color .3s}
+#bat.on{opacity:1}
+#bat svg{width:24px;height:12px}
+#bat rect{transition:width .3s}
+#bat.mid{color:rgba(255,255,255,.55)}
+#bat.low,#bat.hi{color:#ff4b4b}
+#bat.low svg{animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+#hint{position:fixed;left:0;right:0;bottom:calc(7vh + 14px);text-align:center;color:var(--mute);font-size:15px;transition:opacity 1.6s;pointer-events:none;padding:0 20px;opacity:0}
+#joy{position:fixed;width:110px;height:110px;margin:-55px 0 0 -55px;border:1px solid rgba(255,255,255,.16);border-radius:50%;pointer-events:none;display:none}
+#joy i{position:absolute;left:50%;top:50%;width:42px;height:42px;margin:-21px;border-radius:50%;background:rgba(255,255,255,.16)}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;padding:24px;z-index:5;background:radial-gradient(ellipse at 50% 42%,rgba(60,0,0,.5),rgba(0,0,0,.95) 68%)}
+.screen.hide{display:none}
+h1{font-weight:400;font-size:clamp(40px,11vw,72px);line-height:1.05;margin:0;text-wrap:balance}
+.screen p{max-width:32ch;margin:0;color:var(--mute)}
+.screen .lead{color:var(--ink);font-size:17px}
+.small{font-size:13px}
+button{font:inherit;font-family:'Special Elite','Courier New',monospace;font-size:20px;color:#fff;background:var(--red);border:0;padding:12px 34px;min-height:48px;border-radius:2px;cursor:pointer}
+button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+#mon{position:fixed;right:12px;top:calc(7vh + 8px);display:flex;align-items:stretch;gap:8px;padding:6px 8px;background:rgba(0,0,0,.38);border:1px solid rgba(255,255,255,.16);border-radius:3px;pointer-events:none;opacity:0;transition:opacity 1s,color .3s,border-color .3s;font-family:'Share Tech Mono',monospace;color:rgba(255,255,255,.75)}
+#mon.on{opacity:1}
+#mon.hi{color:#ff4b4b;border-color:rgba(255,75,75,.45)}
+#ecg{width:clamp(110px,30vw,170px);height:52px;display:block;background-color:rgba(0,0,0,.25);background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:10px 10px}
+#mon .rd{display:flex;flex-direction:column;justify-content:space-between;min-width:52px}
+#mon .lb{font-size:10px;opacity:.7;display:flex;justify-content:space-between;gap:6px}
+#bpm{font-size:30px;line-height:1;text-align:right;text-shadow:0 0 8px currentColor}
+#hrt{transition:opacity .08s}
+#hrt.off{opacity:.15}
+#dbg{position:fixed;left:8px;bottom:8px;z-index:9;font:11px monospace;color:#7f7;background:rgba(0,0,0,.6);padding:2px 6px}
+#lv{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+#lv button{font-size:15px;padding:8px 14px;min-height:44px;background:transparent;border:1px solid rgba(255,255,255,.3);color:var(--ink)}
+#lv button.cur{border-color:var(--red);color:#fff}
+.screen button.ghost{background:transparent;border:1px solid rgba(255,255,255,.35)}
+#err{position:fixed;left:12px;right:12px;bottom:12px;color:#f88;font:12px monospace;z-index:9;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud" class="tw"><svg viewBox="0 0 24 24" fill="none"><path d="M8 14a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm3-4h10m-3 0v4m-3-4v3" stroke="#9b958c" stroke-width="1.6" stroke-linecap="round"/></svg><span id="ks">Clé introuvable</span></div>
+<div id="hint" class="tw"></div>
+<div id="bat"><svg viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="21" y="4" width="2" height="4" fill="currentColor"/><rect id="batFill" x="2.5" y="2.5" width="16" height="7" fill="currentColor"/></svg><span id="batTxt">100 %</span></div>
+<div id="mon"><canvas id="ecg"></canvas><div class="rd"><div class="lb"><span>ECG II</span><span id="hrt" class="off">&#9829;</span></div><div id="bpm">--</div><div class="lb"><span>BPM</span><span>x1</span></div></div></div>
+<div id="joy"><i></i></div>
+
+<div id="start" class="screen">
+  <h1 class="tw">Hors champ</h1>
+  <p class="lead">Il ne bouge que lorsque ta lampe ne l'éclaire pas.</p>
+  <p class="small">Trouve la clé, puis la trappe rouge. Ta lampe faiblit : ramasse des piles.<br>Pouce gauche : marcher · pouce droit : orienter la lampe<br>Double tap : sprint court<br>Clavier : ZQSD ou WASD, souris pour viser, Maj pour sprinter</p>
+  <div id="lv"></div>
+  <button id="go">Entrer</button>
+  <p class="small">Casque recommandé</p>
+</div>
+<div id="dead" class="screen hide">
+  <h1 class="tw">Il était derrière toi</h1>
+  <button id="again">Recommencer</button>
+</div>
+<div id="win" class="screen hide">
+  <h1 class="tw">Dehors</h1>
+  <p class="lead">Tu ne l'as jamais vu bouger.</p>
+  <button id="next" hidden>Niveau suivant</button>
+  <button id="again2" class="ghost">Rejouer</button>
+</div>
+<div id="err"></div>
+<div id="dbg" hidden></div>
+
+<script>
+addEventListener('error',e=>{document.getElementById('err').textContent='Erreur : '+(e.message||e)});
+addEventListener('unhandledrejection',e=>{document.getElementById('err').textContent='Erreur : '+(e.reason&&e.reason.message||e.reason)});
+</script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
