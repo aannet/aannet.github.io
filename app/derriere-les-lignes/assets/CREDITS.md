@@ -1,6 +1,6 @@
 # Crédits des assets
 
-`soldier.glb` : mannequin et animations de **Quaternius**, licence **CC0 1.0** (domaine public).
+`soldier.gltf.json` : mannequin et animations de **Quaternius**, licence **CC0 1.0** (domaine public).
 
 - Universal Animation Library (UAL1, Standard) : https://quaternius.com/packs/universalanimationlibrary.html
 - Universal Animation Library 2 (UAL2, Standard) : https://quaternius.com/packs/universalanimationlibrary2.html

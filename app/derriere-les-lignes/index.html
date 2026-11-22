@@ -429,7 +429,7 @@ const wrapA=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;retur
 const turnTo=(a,t,r)=>{const d=wrapA(t-a);return Math.abs(d)<=r?t:a+Math.sign(d)*r};
 
 // ---------- soldats : modèle Quaternius (Universal Animation Library, CC0) ----------
-// Mannequin + clips mocap UAL1/UAL2 réunis dans assets/soldier.glb (voir README).
+// Mannequin + clips mocap UAL1/UAL2 réunis dans assets/soldier.gltf.json (glTF auto-contenu, compression meshopt) (voir README).
 // Les couleurs d'uniforme sont peintes par os dominant, l'équipement est accroché aux os,
 // les armes en main sont placées à chaque frame sur la main droite.
 function rimMat(col,str,skinned){const m=new THREE.MeshLambertMaterial({vertexColors:true});m.onBeforeCompile=sh=>{sh.uniforms.uRim={value:new THREE.Color(col).multiplyScalar(str)};
@@ -437,7 +437,7 @@ function rimMat(col,str,skinned){const m=new THREE.MeshLambertMaterial({vertexCo
 const MAT_P=rimMat(0xffd27a,0.75),MAT_E=rimMat(0xb4ceff,0.42),GEAR_P=rimMat(0xffd27a,0.55),GEAR_E=rimMat(0xb4ceff,0.3);
 const part=list=>mergeGeometries(list.map(a=>colored(...a)));
 const SPH=new THREE.SphereGeometry(1,12,9),SPHL=new THREE.SphereGeometry(1,8,6),CYL10=new THREE.CylinderGeometry(1,1,1,10);
-const SOLDIER=await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync('assets/soldier.glb').catch(err=>{const b=document.getElementById('start');b.textContent='Échec du chargement des personnages';throw err});
+const SOLDIER=await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync('assets/soldier.gltf.json').catch(err=>{const b=document.getElementById('start');b.textContent='Échec du chargement des personnages';throw err});
 const CLIP={};for(const c of SOLDIER.animations)CLIP[c.name]=c;
 const SRC=[];SOLDIER.scene.traverse(o=>{if(o.isSkinnedMesh)SRC.push(o)});SOLDIER.scene.updateMatrixWorld(true);
 const BONES=SRC[0].skeleton.bones.map(b=>b.name);

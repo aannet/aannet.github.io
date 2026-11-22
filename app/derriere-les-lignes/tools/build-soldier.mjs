@@ -5,7 +5,8 @@
 //  - UAL2_Standard.glb  « Universal Animation Library 2 » Standard
 //    https://quaternius.com/packs/universalanimationlibrary2.html (miroir utilisé : github.com/adharshsivan/animationlibrary)
 // Usage : cd tools && npm i @gltf-transform/core@4 @gltf-transform/extensions@4 @gltf-transform/functions@4 meshoptimizer && node build-soldier.mjs
-// Résultat : mannequin + 17 clips, pistes de doigts/scale retirées, rééchantillonné, quantifié, compressé meshopt (~320 Ko).
+// Résultat : soldier.glb, puis converti en ../assets/soldier.gltf.json (glTF JSON auto-contenu, servable partout).
+// Mannequin + 17 clips, pistes de doigts/scale retirées, rééchantillonné, quantifié, compressé meshopt (~320 Ko).
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { resample, prune, dedup, quantize, meshopt } from '@gltf-transform/functions';
@@ -40,5 +41,7 @@ for (const an of ra.listAnimations()) for (const ch of an.listChannels()) {
 }
 for (const a of ra.listAccessors()) if (a.listParents().filter(p=>p.propertyType!=='Root').length===0) a.dispose();
 await A.transform(resample({tolerance:4e-3}), dedup(), prune(), (doc)=>{for (const a of doc.getRoot().listAccessors()) if (a.listParents().filter(p=>p.propertyType!=='Root').length===0) a.dispose();}, quantize(), meshopt({encoder:MeshoptEncoder, level:'medium'}));
-await io.write('../assets/soldier.glb', A);
+await io.write('soldier.glb', A);
+// conversion en glTF JSON auto-contenu (les artifacts claude.ai ne servent pas les .glb)
+{const { json, resources } = await io.writeJSON(A, { format: 'gltf' });for (const b of json.buffers || []) if (b.uri && resources[b.uri]) b.uri = 'data:application/octet-stream;base64,' + Buffer.from(resources[b.uri]).toString('base64');(await import('fs')).writeFileSync('../assets/soldier.gltf.json', JSON.stringify(json));}
 console.log('clips', ra.listAnimations().map(a => a.getName() + ':' + a.listChannels().length).join(' '));

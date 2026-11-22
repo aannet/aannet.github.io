@@ -1,6 +1,6 @@
 # Derrière les lignes — dossier de reprise
 
-Jeu d'infiltration tactique façon *Commandos: Behind Enemy Lines* (1998), jouable au doigt sur téléphone, dans une page `index.html` (~900 lignes, ~100 Ko) plus un asset `assets/soldier.glb` (~320 Ko) pour les personnages. Three.js r160 via CDN, aucun build. Les personnages sont le mannequin animé de Quaternius (Universal Animation Library, CC0, animations mocap) ; tout le reste est procédural (décor, textures, sons, équipement des soldats).
+Jeu d'infiltration tactique façon *Commandos: Behind Enemy Lines* (1998), jouable au doigt sur téléphone, dans une page `index.html` (~900 lignes, ~100 Ko) plus un asset `assets/soldier.gltf.json` (~390 Ko, glTF JSON auto-contenu) pour les personnages. Three.js r160 via CDN, aucun build. Les personnages sont le mannequin animé de Quaternius (Universal Animation Library, CC0, animations mocap) ; tout le reste est procédural (décor, textures, sons, équipement des soldats).
 
 - En ligne : https://aannet.github.io/app/derriere-les-lignes/
 - Source : ce dossier, fichier `index.html`
@@ -32,7 +32,7 @@ Une mission solo. Le commando part de la forêt au sud-ouest, entre dans une bas
 ## 2. Pile technique
 
 - **Three.js 0.160.0** via `importmap` sur `cdn.jsdelivr.net` (`three` + `three/addons/` pour `BufferGeometryUtils`, `GLTFLoader`, `SkeletonUtils` et le décodeur meshopt).
-- **Personnages** : `assets/soldier.glb`, mannequin Quaternius + 17 clips (UAL1 et UAL2, CC0), construit par `tools/build-soldier.mjs` (glTF-Transform : tri des clips, rééchantillonnage, quantification, compression meshopt). Crédits dans `assets/CREDITS.md`.
+- **Personnages** : `assets/soldier.gltf.json`, mannequin Quaternius + 17 clips (UAL1 et UAL2, CC0), construit par `tools/build-soldier.mjs` (glTF-Transform : tri des clips, rééchantillonnage, quantification, compression meshopt). Crédits dans `assets/CREDITS.md`.
 - **Un seul `<script type="module">`**, tout le code est dans un bloc `{ ... }` pour éviter les globales.
 - **Polices** : Google Fonts (Black Ops One pour les titres, Barlow Condensed pour l'interface).
 - **Audio** : WebAudio pur (bruit filtré + oscillateurs), initialisé au premier clic (« Commencer »).
@@ -53,7 +53,7 @@ Le script est découpé par des commentaires `// ---------- nom ----------`. Ord
 | `herbe instanciée` | `InstancedMesh` de ~2600 touffes, vent dans le vertex shader |
 | `ambiance` | Fumée de cheminées, drapeau animé, poussière (désactivée en A+), objet `quality` |
 | `pathfinding` | A* 8 directions sans coupe de coin, lissage par ligne de vue, `losClear` (vue), `castRay` (cônes) |
-| `soldats : modèle Quaternius` | Chargement de `soldier.glb` (top-level await), peinture des uniformes par os, équipement accroché aux os, `makeSoldier()`, `animate()` (pose → clip), `placeGear()` (armes en main), `placeBody()` (corps au sol ou porté) |
+| `soldats : modèle Quaternius` | Chargement de `soldier.gltf.json` (top-level await), peinture des uniformes par os, équipement accroché aux os, `makeSoldier()`, `animate()` (pose → clip), `placeGear()` (armes en main), `placeBody()` (corps au sol ou porté) |
 | `cônes de vision` | Maillages dynamiques des cônes (proche/lointain + contour), recalculés à chaque frame avec occlusion |
 | `audio` | `sfx.*`, sirène |
 | `HUD` | `toast()`, cœurs, `setMode()` (pierre), `setWeapon()` (couteau/pistolet) |
@@ -80,7 +80,7 @@ Le script est découpé par des commentaires `// ---------- nom ----------`. Ord
 - `follow = true` : la caméra suit le commando. Glisser passe `follow` à false, le bouton Centrer le remet.
 
 **Personnages** (modèle Quaternius)
-- `soldier.glb` contient un mannequin skinné (65 os, nommage façon Unreal : `pelvis`, `spine_01..03`, `Head`, `upperarm_l/r`, `lowerarm_l/r`, `hand_l/r`, `thigh_l/r`, `calf_l/r`, `foot_l/r`) et 17 clips sans root motion.
+- `soldier.gltf.json` contient un mannequin skinné (65 os, nommage façon Unreal : `pelvis`, `spine_01..03`, `Head`, `upperarm_l/r`, `lowerarm_l/r`, `hand_l/r`, `thigh_l/r`, `calf_l/r`, `foot_l/r`) et 17 clips sans root motion.
 - Au chargement, `painted('p'|'e')` clone la géométrie et peint une couleur par sommet selon l'os dominant (`zone()` : peau, mains, veste, manches, pantalon, bottes). La même passe calcule des boîtes englobantes par os (`ZB`) qui servent à placer l'équipement. **Utiliser `getVertexPosition` (position skinnée)** : la pose par défaut des os n'est pas la pose de bind brute.
 - L'équipement (`GEAR`) est construit en coordonnées de pose de repos puis accroché aux os avec `bone.attach()` : casque ou béret sur `Head`, sac et fusil dans le dos sur `spine_03`, ceinturon sur `pelvis`.
 - Les armes en main (fusil des gardes, couteau, pistolet, sniper couché) sont des meshes de scène replacés à chaque frame par `placeGear(s, yaw)` sur `hand_r`, après le positionnement de la racine.
@@ -152,8 +152,8 @@ Chiffres mesurés le 22/11/2026 sur la version publiée, sauf mention « cible �
 | Exigence | Valeur |
 |---|---|
 | Fichier `index.html` | ~100 Ko. Plafond conseillé : 150 Ko, au-delà la relecture complète par un LLM devient coûteuse |
-| Asset personnages | `assets/soldier.glb` ~320 Ko (mesh quantifié + 17 clips compressés meshopt). Ajouter un clip coûte 5 à 30 Ko |
-| Dépendances réseau | Three.js 0.160 (~1,3 Mo non compressé, ~300 Ko gzip, mis en cache par le CDN), `BufferGeometryUtils`, `GLTFLoader`, `SkeletonUtils`, décodeur meshopt, `soldier.glb` (même origine que la page), 2 polices Google. Rien d'autre |
+| Asset personnages | `assets/soldier.gltf.json` ~390 Ko (mesh quantifié + 17 clips compressés meshopt, buffer en base64 : format JSON choisi parce que les artifacts claude.ai ne servent pas les `.glb`). Ajouter un clip coûte 5 à 30 Ko |
+| Dépendances réseau | Three.js 0.160 (~1,3 Mo non compressé, ~300 Ko gzip, mis en cache par le CDN), `BufferGeometryUtils`, `GLTFLoader`, `SkeletonUtils`, décodeur meshopt, `soldier.gltf.json` (même origine que la page), 2 polices Google. Rien d'autre |
 | Génération au démarrage | Textures canvas (sol 2048², 4 textures de matériaux, nuages), fusion de géométrie, carte d'ombres : quelques centaines de ms sur téléphone (cible < 1,5 s avant l'écran d'intro jouable) |
 | Mémoire | ~40 Mo de tas JS mesurés. Côté GPU, environ 40 Mo dominés par la texture du sol (2048² + mipmaps) et la carte d'ombres. Cible : rester sous 150 Mo au total |
 
@@ -166,7 +166,7 @@ Chiffres mesurés le 22/11/2026 sur la version publiée, sauf mention « cible �
 | Écran | Pensé pour le portrait, 360 px de large minimum (la barre de 6 boutons tient en 361 px). Paysage et desktop fonctionnent, sans mise en page dédiée |
 | Encoches | Marges `env(safe-area-inset-*)` sur le HUD, la barre et la lunette |
 | Entrées | Tactile (tap, double-tap, glisser, pincer) et souris (clic, glisser, molette). Pas de clavier ni de manette |
-| Hors ligne | Non : il faut le CDN au premier chargement. Pas de service worker. La page doit être servie en HTTP (pas en `file://`) pour charger `soldier.glb` |
+| Hors ligne | Non : il faut le CDN au premier chargement. Pas de service worker. La page doit être servie en HTTP (pas en `file://`) pour charger `soldier.gltf.json` |
 
 **Ergonomie et accessibilité**
 
@@ -215,7 +215,7 @@ await p.route('**/three.module.js', r => r.fulfill({ path: 'node_modules/three/b
 await p.route('**/examples/jsm/**', r => { const u = new URL(r.request().url());
   r.fulfill({ path: 'node_modules/three' + u.pathname.split('three@0.160.0')[1], contentType: 'text/javascript' }); });
 await p.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
-await p.goto('file:///chemin/vers/dbg.html'); // lancer Chrome avec --allow-file-access-from-files, ou servir en HTTP, pour que soldier.glb se charge await p.waitForTimeout(2500);
+await p.goto('file:///chemin/vers/dbg.html'); // lancer Chrome avec --allow-file-access-from-files, ou servir en HTTP, pour que soldier.gltf.json se charge await p.waitForTimeout(2500);
 await p.click('#start');
 // ... scénario, captures : await p.screenshot({ path: 'x.png' });
 console.log(errs); await b.close();
@@ -248,7 +248,7 @@ Le rendu swiftshader est lent (quelques fps) : le temps de jeu avance moins vite
 ## 10. Instructions pour un LLM qui reprend le projet
 
 1. **Lis ce document, puis le fichier entier** avant de modifier. Le code est compact (une ligne peut contenir plusieurs instructions). Repère-toi aux commentaires de section.
-2. **Garde le format** : une page HTML plus `assets/soldier.glb`, Three.js 0.160 en importmap, pas de build, pas d'asset externe, pas de framework. Le propriétaire publie sur GitHub Pages et parfois en artifact claude.ai.
+2. **Garde le format** : une page HTML plus `assets/soldier.gltf.json`, Three.js 0.160 en importmap, pas de build, pas d'asset externe, pas de framework. Le propriétaire publie sur GitHub Pages et parfois en artifact claude.ai.
 3. **Édite par remplacements exacts et vérifiés.** Méthode qui a bien marché : un script Python qui fait `assert s.count(ancien) == 1` avant chaque `replace`, puis `node --check` sur le module extrait :
    ```bash
    python3 -c "s=open('index.html').read();i=s.index('<script type=\"module\">')+22;j=s.index('</script>',i);open('/tmp/m.mjs','w').write(s[i:j])" && node --check /tmp/m.mjs
