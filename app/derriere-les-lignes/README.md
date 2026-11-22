@@ -1,6 +1,6 @@
 # Derrière les lignes — dossier de reprise
 
-Jeu d'infiltration tactique façon *Commandos: Behind Enemy Lines* (1998), jouable au doigt sur téléphone, dans **un seul fichier** `index.html` (~870 lignes, ~95 Ko). Three.js r160 via CDN, aucun build, aucun asset externe : tout est procédural (géométrie, textures, sons).
+Jeu d'infiltration tactique façon *Commandos: Behind Enemy Lines* (1998), jouable au doigt sur téléphone, dans une page `index.html` (~900 lignes, ~100 Ko) plus un asset `assets/soldier.glb` (~320 Ko) pour les personnages. Three.js r160 via CDN, aucun build. Les personnages sont le mannequin animé de Quaternius (Universal Animation Library, CC0, animations mocap) ; tout le reste est procédural (décor, textures, sons, équipement des soldats).
 
 - En ligne : https://aannet.github.io/app/derriere-les-lignes/
 - Source : ce dossier, fichier `index.html`
@@ -16,7 +16,7 @@ Une mission solo. Le commando part de la forêt au sud-ouest, entre dans une bas
 
 | Élément | Comportement |
 |---|---|
-| Déplacement | Tap au sol : marche. Double-tap : course (bruyante, rayon 4,5). Bouton Ramper : reptation lente, profil bas |
+| Déplacement | Tap au sol : marche. Double-tap : course (bruyante, rayon 4,5). Bouton Accroupi : marche accroupie lente, profil bas (même règle de détection que l'ancienne reptation) |
 | Cônes de vision | Partie foncée (0–5 m) : voit le commando même à plat ventre. Partie claire (5–10 m) : seulement debout. Bloqués par murs, arbres, buissons, sacs. **La clôture ne bloque pas la vue** |
 | Soupçon | Jauge par garde : « ? » jaune, puis « ! » rouge = alerte |
 | Alerte | Sirène, gardes dans un rayon de 22 m chassent la dernière position connue. Retombe après 25 s sans contact visuel |
@@ -31,7 +31,8 @@ Une mission solo. Le commando part de la forêt au sud-ouest, entre dans une bas
 
 ## 2. Pile technique
 
-- **Three.js 0.160.0** via `importmap` sur `cdn.jsdelivr.net` (`three` + `three/addons/` pour `BufferGeometryUtils.mergeGeometries`).
+- **Three.js 0.160.0** via `importmap` sur `cdn.jsdelivr.net` (`three` + `three/addons/` pour `BufferGeometryUtils`, `GLTFLoader`, `SkeletonUtils` et le décodeur meshopt).
+- **Personnages** : `assets/soldier.glb`, mannequin Quaternius + 17 clips (UAL1 et UAL2, CC0), construit par `tools/build-soldier.mjs` (glTF-Transform : tri des clips, rééchantillonnage, quantification, compression meshopt). Crédits dans `assets/CREDITS.md`.
 - **Un seul `<script type="module">`**, tout le code est dans un bloc `{ ... }` pour éviter les globales.
 - **Polices** : Google Fonts (Black Ops One pour les titres, Barlow Condensed pour l'interface).
 - **Audio** : WebAudio pur (bruit filtré + oscillateurs), initialisé au premier clic (« Commencer »).
@@ -45,14 +46,14 @@ Le script est découpé par des commentaires `// ---------- nom ----------`. Ord
 
 | Section | Contenu |
 |---|---|
-| HTML + CSS | HUD (objectif, cœurs, alerte, mèche, toast), barre d'actions (Ramper, Couteau, Pistolet, Sniper, Pierre, bouton contextuel), bouton Centrer flottant, lunette (`#scope`), écrans intro et fin, vignette `#grade`, grain `#grain` |
+| HTML + CSS | HUD (objectif, cœurs, alerte, mèche, toast), barre d'actions (Accroupi, Couteau, Pistolet, Sniper, Pierre, bouton contextuel), bouton Centrer flottant, lunette (`#scope`), écrans intro et fin, vignette `#grade`, grain `#grain` |
 | `grille` | Grille 48×48, tableaux `mv` (bloque le passage) et `si` (bloque la vue), `mark()`, `rng()` déterministe (seed 11) |
 | `rendu` | Renderer, caméra orthographique iso, lumières, textures de nuages, `patchMat()` (ombres de nuages + vent), géométrie statique fusionnée (`colored`, `addS`), textures peintes (`stoneTex`, `plasterTex`, `tileTex`, `plankTex`), tous les objets de la carte, forêt, barbelés |
 | `sol peint` | Canvas 2048 px peint une fois : boue, route, dalle de la base, cratères, flaques, AO autour des obstacles |
 | `herbe instanciée` | `InstancedMesh` de ~2600 touffes, vent dans le vertex shader |
 | `ambiance` | Fumée de cheminées, drapeau animé, poussière (désactivée en A+), objet `quality` |
 | `pathfinding` | A* 8 directions sans coupe de coin, lissage par ligne de vue, `losClear` (vue), `castRay` (cônes) |
-| `soldats : rig articulé` | Géométries des soldats, `makeSoldier()`, système d'animation procédurale `animate()` |
+| `soldats : modèle Quaternius` | Chargement de `soldier.glb` (top-level await), peinture des uniformes par os, équipement accroché aux os, `makeSoldier()`, `animate()` (pose → clip), `placeGear()` (armes en main), `placeBody()` (corps au sol ou porté) |
 | `cônes de vision` | Maillages dynamiques des cônes (proche/lointain + contour), recalculés à chaque frame avec occlusion |
 | `audio` | `sfx.*`, sirène |
 | `HUD` | `toast()`, cœurs, `setMode()` (pierre), `setWeapon()` (couteau/pistolet) |
@@ -78,14 +79,15 @@ Le script est découpé par des commentaires `// ---------- nom ----------`. Ord
 - Orthographique, décalage fixe `CAM_OFF = (22, 26, 22)` depuis `camTarget`. `cam.zoom` entre 0,55 et 2,4 (2,2 à 5 en lunette).
 - `follow = true` : la caméra suit le commando. Glisser passe `follow` à false, le bouton Centrer le remet.
 
-**Rig des soldats** (signes des rotations, piège classique)
-- Hiérarchie : `root → body (bassin, y=0,98) → thL/thR (cuisses) → shL/shR (tibias)` et `body → torso → head, uaL/uaR (bras) → faL/faR (avant-bras)`.
-- Cuisse `x < 0` = jambe vers l'avant. Tibia `x > 0` = genou plié.
-- Bras `x < 0` = bras vers l'avant / le haut. Avant-bras `x < 0` = coude plié.
-- `body.rotation.x > 0` = bascule vers l'avant (à plat ventre ≈ 1,5). `< 0` = sur le dos.
-- `animate(s, pose, {dt, speed, look, p, fall})` calcule une cible par articulation (clés `JK`) puis lisse vers elle. Poses : `stand`, `carry`, `rifle`, `ready`, `aimRifle`, `aimPistol`, `prone`, `proneAim`, `kneel`, `throw`, `stab`, `dying`, `dead`. `p` = progression 0→1 des poses ponctuelles, `fall` = +1 face contre terre, −1 sur le dos.
-- Cycle de marche : phase `s.ph` qui avance selon la vitesse réelle divisée par la longueur de foulée (1,45 marche, 2,7 course, 0,85 reptation). `walkLeg`/`runLeg` donnent hanche et genou en fonction de la phase (appui sur [0,π), balancier sur [π,2π)).
-- Le fusil des gardes est enfant du torse et interpole entre 3 positions `RQ` : `sling` (bretelle), `ready` (position basse), `aim` (épaulé). Le sniper du joueur entre `SQ.back` et `SQ.aim`.
+**Personnages** (modèle Quaternius)
+- `soldier.glb` contient un mannequin skinné (65 os, nommage façon Unreal : `pelvis`, `spine_01..03`, `Head`, `upperarm_l/r`, `lowerarm_l/r`, `hand_l/r`, `thigh_l/r`, `calf_l/r`, `foot_l/r`) et 17 clips sans root motion.
+- Au chargement, `painted('p'|'e')` clone la géométrie et peint une couleur par sommet selon l'os dominant (`zone()` : peau, mains, veste, manches, pantalon, bottes). La même passe calcule des boîtes englobantes par os (`ZB`) qui servent à placer l'équipement. **Utiliser `getVertexPosition` (position skinnée)** : la pose par défaut des os n'est pas la pose de bind brute.
+- L'équipement (`GEAR`) est construit en coordonnées de pose de repos puis accroché aux os avec `bone.attach()` : casque ou béret sur `Head`, sac et fusil dans le dos sur `spine_03`, ceinturon sur `pelvis`.
+- Les armes en main (fusil des gardes, couteau, pistolet, sniper couché) sont des meshes de scène replacés à chaque frame par `placeGear(s, yaw)` sur `hand_r`, après le positionnement de la racine.
+- `animate(s, pose, {dt, speed, p, fall})` choisit un clip et fait un fondu de 0,22 s quand il change. Clips en boucle : vitesse de lecture = vitesse réelle / vitesse du clip (`SPEED` : marche 1,0, jogging 3,0, sprint 5,0, accroupi 0,75, porter 0,65 m/s), pour éviter que les pieds glissent. Clips « pilotés » (lancer, couteau, ramasser, chute) : `timeScale = 0` et le temps du clip suit la progression `p`.
+- Correspondance pose → clip : `stand` → Idle / Jog (commando) ou Walk / Jog (gardes) / Sprint ; `crouch` → Crouch_Idle / Crouch_Fwd ; `rifle` (garde calme, fusil dans le dos) ; `ready` → Pistol_Idle + fusil en main ; `aimRifle`, `aimPistol` → Pistol_Aim_Neutral ; `carry` → Walk_Carry ; `kneel` → Fixing_Kneeling (explosif) ; `pickup` → PickUp_Table ; `throw` → OverhandThrow ; `stab` → Sword_Attack ; `dying`/`dead` → Hit_Knockback (couteau) ou Death01 (balle) ; `proneAim` → dernière image de Hit_Knockback, retournée face contre terre (`model.rotation.z = π`).
+- Un corps tué se « pose » quand la chute est finie : `e.x/e.z` sont déplacés sur le bassin, puis `placeBody()` garde le bassin à cet endroit. Porté, le corps est tenu à 1 m de haut devant le commando.
+- Échelle : `SCALE = 1.03` (environ 1,75 m). Le modèle regarde vers +z dans sa pose de repos, comme le reste du jeu.
 
 **Ombres statiques** (optimisation clé)
 - `renderer.shadowMap.autoUpdate = false`. La carte d'ombres est calculée une fois au chargement. Les persos ne projettent pas d'ombre réelle mais un disque dégradé (`blob`), et reçoivent les ombres du décor.
@@ -101,7 +103,7 @@ Le script est découpé par des commentaires `// ---------- nom ----------`. Ord
 ## 5. Gameplay : comment ça marche dans le code
 
 **Perception** (`updateEnemy`)
-- `seesPlayer(e)` : distance ≤ portée (NEAR=5 si le commando rampe, RANGE=10 sinon, ×1,2 pendant l'alerte), angle dans le demi-angle `HALF=0,6 rad`, puis `losClear`.
+- `seesPlayer(e)` : distance ≤ portée (NEAR=5 si le commando est accroupi, RANGE=10 sinon, ×1,2 pendant l'alerte), angle dans le demi-angle `HALF=0,6 rad`, puis `losClear`.
 - Le soupçon `e.sus` monte plus vite si le commando est proche, s'il court, ou si l'alerte est active. À 1 → `goAlert`.
 - Les gardes repèrent aussi les corps non cachés (`found`) dans leur cône, ce qui déclenche `raiseAlarm` à l'emplacement du corps.
 
@@ -110,7 +112,7 @@ Le script est découpé par des commentaires `// ---------- nom ----------`. Ord
 
 **Ajouter un garde** : une entrée dans `ENEMIES`, soit sentinelle `{x, z, a, scan}` (scan = amplitude du balayage en radians), soit patrouille `{path: [[x,z], ...]}`. Les waypoints doivent être sur des cases libres (voir test partie 8).
 
-**Tirs ennemis** : probabilité 0,2–0,7 selon la distance (−0,12 si le commando rampe), portée 12 m. **Invariant à garder** : portée du pistolet (15) > portée de tir ennemie (12) > portée de vue en alerte (12). Sinon le joueur se fait tirer dessus sans pouvoir répondre (bug déjà corrigé une fois).
+**Tirs ennemis** : probabilité 0,2–0,7 selon la distance (−0,12 si le commando est accroupi), portée 12 m. **Invariant à garder** : portée du pistolet (15) > portée de tir ennemie (12) > portée de vue en alerte (12). Sinon le joueur se fait tirer dessus sans pouvoir répondre (bug déjà corrigé une fois).
 
 **Bruit** : `makeNoise(x, z, rayon)` envoie en `investigate` les gardes calmes dans le rayon, et redirige ceux en `hunt`.
 
@@ -121,11 +123,11 @@ Le script est découpé par des commentaires `// ---------- nom ----------`. Ord
 Choisie après comparaison de plusieurs pistes (diorama doré, toon, nuit, hiver, A sépia) :
 - Lumière couverte mais soleil franc (`DirectionalLight 0xfff0d8`, intensité 2,7) et ciel froid (`Hemisphere 0xa8b6c6 / 0x5a4c3a`), tone mapping ACES, exposition 1,2, brume grise `0x6e7376`.
 - Pas de filtre de couleur global. Le contraste vient de la hiérarchie des valeurs : sol sombre et peu bruité, route et murs plus clairs.
-- Liseré lumineux (rim light) dans le shader des soldats : doré pour le commando (`soldierMatP`), bleu pâle pour les gardes (`soldierMatE`). Sert à distinguer ami/ennemi.
+- Liseré lumineux (rim light) dans le shader des soldats : doré pour le commando (`MAT_P`, `GEAR_P`), bleu pâle pour les gardes (`MAT_E`, `GEAR_E`). Sert à distinguer ami/ennemi.
 - Cônes verts (jaunes en soupçon, rouges en alerte) avec contour clair.
 - Décor de guerre : barbelés en accordéon (`wire()`, un seul `LineSegments`), chevaux de frise (`frise()`), cratères, ~20 % d'arbres morts.
 
-Décisions écartées et pourquoi : sprites pré-rendus (rotation saccadée, artefacts au zoom, la géométrie des persos n'est pas le goulot de perf) ; tilt-shift (rendu « jouet », contraire au ton adulte voulu).
+Personnages : passage du rig procédural maison au mannequin Quaternius animé en mocap pour le réalisme des mouvements (novembre 2026). Décisions écartées et pourquoi : sprites pré-rendus (rotation saccadée, artefacts au zoom, la géométrie des persos n'est pas le goulot de perf) ; tilt-shift (rendu « jouet », contraire au ton adulte voulu).
 
 ## 7. Contraintes non fonctionnelles (NFR)
 
@@ -136,7 +138,7 @@ Chiffres mesurés le 22/11/2026 sur la version publiée, sauf mention « cible �
 | Exigence | Valeur |
 |---|---|
 | Fluidité (cible) | 60 fps sur un téléphone récent, 30 fps minimum sur un milieu de gamme de 3 ans (qualité basse automatique) |
-| Draw calls par frame | 68 mesurés (scène complète, 11 gardes). Plafond à ne pas dépasser : ~120 |
+| Draw calls par frame | ~104 mesurés (scène complète, 11 gardes, 2 primitives skinnées + 3 pièces d'équipement par soldat). Plafond à ne pas dépasser : ~140 |
 | Triangles par frame | ~265 000 mesurés, dont l'essentiel dans le mesh statique fusionné. Plafond : ~400 000 |
 | Programmes shader | 9. Chaque nouveau type de matériau en ajoute un : réutiliser les matériaux existants |
 | Ombres | Carte 2048², calculée une fois. Aucune ombre dynamique par frame (règle dure) |
@@ -149,8 +151,9 @@ Chiffres mesurés le 22/11/2026 sur la version publiée, sauf mention « cible �
 
 | Exigence | Valeur |
 |---|---|
-| Fichier `index.html` | 94 Ko. Plafond conseillé : 150 Ko, au-delà la relecture complète par un LLM devient coûteuse |
-| Dépendances réseau | Three.js 0.160 (~1,3 Mo non compressé, ~300 Ko gzip, mis en cache par le CDN), `BufferGeometryUtils`, 2 polices Google. Rien d'autre |
+| Fichier `index.html` | ~100 Ko. Plafond conseillé : 150 Ko, au-delà la relecture complète par un LLM devient coûteuse |
+| Asset personnages | `assets/soldier.glb` ~320 Ko (mesh quantifié + 17 clips compressés meshopt). Ajouter un clip coûte 5 à 30 Ko |
+| Dépendances réseau | Three.js 0.160 (~1,3 Mo non compressé, ~300 Ko gzip, mis en cache par le CDN), `BufferGeometryUtils`, `GLTFLoader`, `SkeletonUtils`, décodeur meshopt, `soldier.glb` (même origine que la page), 2 polices Google. Rien d'autre |
 | Génération au démarrage | Textures canvas (sol 2048², 4 textures de matériaux, nuages), fusion de géométrie, carte d'ombres : quelques centaines de ms sur téléphone (cible < 1,5 s avant l'écran d'intro jouable) |
 | Mémoire | ~40 Mo de tas JS mesurés. Côté GPU, environ 40 Mo dominés par la texture du sol (2048² + mipmaps) et la carte d'ombres. Cible : rester sous 150 Mo au total |
 
@@ -163,7 +166,7 @@ Chiffres mesurés le 22/11/2026 sur la version publiée, sauf mention « cible �
 | Écran | Pensé pour le portrait, 360 px de large minimum (la barre de 6 boutons tient en 361 px). Paysage et desktop fonctionnent, sans mise en page dédiée |
 | Encoches | Marges `env(safe-area-inset-*)` sur le HUD, la barre et la lunette |
 | Entrées | Tactile (tap, double-tap, glisser, pincer) et souris (clic, glisser, molette). Pas de clavier ni de manette |
-| Hors ligne | Non : il faut le CDN au premier chargement. Pas de service worker |
+| Hors ligne | Non : il faut le CDN au premier chargement. Pas de service worker. La page doit être servie en HTTP (pas en `file://`) pour charger `soldier.glb` |
 
 **Ergonomie et accessibilité**
 
@@ -189,7 +192,7 @@ Chiffres mesurés le 22/11/2026 sur la version publiée, sauf mention « cible �
 
 **Maintenabilité**
 
-- Un seul fichier, sans build ni dépendance npm à l'exécution, versions figées (Three.js 0.160.0) : le jeu doit tourner tel quel dans plusieurs années tant que le CDN sert cette version.
+- Une page plus un asset, sans build ni dépendance npm à l'exécution, versions figées (Three.js 0.160.0) : le jeu doit tourner tel quel dans plusieurs années tant que le CDN sert cette version.
 - Code compact mais découpé en sections commentées. Toute nouvelle fonctionnalité va dans la section correspondante plutôt qu'en fin de fichier.
 - Le README est à mettre à jour à chaque changement de mécanique, de constante clé ou de convention.
 
@@ -212,7 +215,7 @@ await p.route('**/three.module.js', r => r.fulfill({ path: 'node_modules/three/b
 await p.route('**/examples/jsm/**', r => { const u = new URL(r.request().url());
   r.fulfill({ path: 'node_modules/three' + u.pathname.split('three@0.160.0')[1], contentType: 'text/javascript' }); });
 await p.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
-await p.goto('file:///chemin/vers/dbg.html'); await p.waitForTimeout(2500);
+await p.goto('file:///chemin/vers/dbg.html'); // lancer Chrome avec --allow-file-access-from-files, ou servir en HTTP, pour que soldier.glb se charge await p.waitForTimeout(2500);
 await p.click('#start');
 // ... scénario, captures : await p.screenshot({ path: 'x.png' });
 console.log(errs); await b.close();
@@ -236,6 +239,8 @@ Le rendu swiftshader est lent (quelques fps) : le temps de jeu avance moins vite
 
 - Les gardes ne se gênent pas entre eux ni avec le commando (pas de collision entre personnages).
 - Pas de sauvegarde, une seule mission.
+- Pas de reptation : la bibliothèque gratuite de Quaternius n'en contient pas (elle existe dans la version payante « Pro »). Accroupi la remplace ; la position couchée du sniper est une image fixe.
+- Les mannequins n'ont pas de visage, et la main gauche ne tient pas vraiment le fusil (clips de pistolet à deux mains réutilisés).
 - Les persos à proximité immédiate d'un mur peuvent visuellement le traverser un peu.
 - Le passage de la qualité haute à basse est définitif pendant la session.
 - Idées déjà évoquées avec le propriétaire : traîner un corps accroupi (plus lent, plus discret) ; mission d'hiver de nuit avec projecteur de mirador comme second type de cône mobile (lookdev réalisé) ; éclaircir la forêt de départ ; alléger les cônes rouges en alerte ; ajuster la fenêtre « par derrière » du couteau.
@@ -243,7 +248,7 @@ Le rendu swiftshader est lent (quelques fps) : le temps de jeu avance moins vite
 ## 10. Instructions pour un LLM qui reprend le projet
 
 1. **Lis ce document, puis le fichier entier** avant de modifier. Le code est compact (une ligne peut contenir plusieurs instructions). Repère-toi aux commentaires de section.
-2. **Garde le format** : un seul fichier HTML, Three.js 0.160 en importmap, pas de build, pas d'asset externe, pas de framework. Le propriétaire publie sur GitHub Pages et parfois en artifact claude.ai.
+2. **Garde le format** : une page HTML plus `assets/soldier.glb`, Three.js 0.160 en importmap, pas de build, pas d'asset externe, pas de framework. Le propriétaire publie sur GitHub Pages et parfois en artifact claude.ai.
 3. **Édite par remplacements exacts et vérifiés.** Méthode qui a bien marché : un script Python qui fait `assert s.count(ancien) == 1` avant chaque `replace`, puis `node --check` sur le module extrait :
    ```bash
    python3 -c "s=open('index.html').read();i=s.index('<script type=\"module\">')+22;j=s.index('</script>',i);open('/tmp/m.mjs','w').write(s[i:j])" && node --check /tmp/m.mjs
@@ -252,4 +257,4 @@ Le rendu swiftshader est lent (quelques fps) : le temps de jeu avance moins vite
 5. **Après chaque changement** : respect des budgets NFR de la partie 7, vérification syntaxique, test headless (zéro erreur `pageerror`), test d'accessibilité des chemins si la carte a bougé, capture d'écran pour juger le visuel. Regarde les captures avant d'annoncer que c'est réussi.
 6. **Performance mobile** : préfère cuire au chargement (textures canvas, ombres, fusion de géométrie) plutôt que calculer à chaque frame. Évite les filtres plein écran et les post-process WebGL. Une nouvelle lumière dynamique coûte cher.
 7. **Préférences du propriétaire** : réponses en français, directes, sans remplissage. Il aime qu'on lui propose 2–3 options argumentées avant un gros chantier visuel, et qu'on chiffre la probabilité que la solution lui convienne. Il teste sur son téléphone.
-8. **Déploiement** : copier le fichier dans `app/derriere-les-lignes/index.html` du dépôt `aannet/aannet.github.io`, commit sur `master` (c'est la branche publiée par GitHub Pages), push. Mettre à jour la carte de la page d'accueil si la description change.
+8. **Déploiement** : copier `index.html` et `assets/` dans `app/derriere-les-lignes/` du dépôt `aannet/aannet.github.io`, commit sur `master` (c'est la branche publiée par GitHub Pages), push. Mettre à jour la carte de la page d'accueil si la description change.
