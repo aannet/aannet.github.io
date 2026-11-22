@@ -3,45 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aannet — lab</title>
+<title>aannet — jeux & expériences</title>
 <meta name="description" content="Jeux et expériences web jouables sur mobile.">
+<meta name="theme-color" content="#0b0b0c">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Archivo+Black&display=swap" rel="stylesheet">
 <style>
-:root{color-scheme:dark;--bg:#0b0b0c;--ink:#e8e6e1;--mute:#8a877f;--line:#24241f;--acc:#7cff9b}
+:root{color-scheme:dark;--bg:#0b0b0c;--fg:#f2f2f2;--mu:#6b7280;--ac:#00e5ff;--on:#0b0b0c;--ln:#23272e}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-main{max-width:640px;margin:0 auto;padding:48px 20px 64px}
-h1{font-size:22px;font-weight:600;margin:0 0 4px;letter-spacing:.02em}
-.sub{color:var(--mute);margin:0 0 40px;font-size:14px}
-h2{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.14em;color:var(--mute);margin:40px 0 8px}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif}
+a{color:inherit;text-decoration:none}
+main{max-width:760px;margin:0 auto}
+header{padding:24px 16px 20px;border-bottom:4px solid var(--ln)}
+.k{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--mu);margin-bottom:12px}
+h1{font-family:'Archivo Black',Impact,sans-serif;font-weight:400;font-size:clamp(56px,18vw,120px);line-height:.85;margin:0;letter-spacing:-.04em;text-transform:uppercase}
+h1 em{font-style:normal;color:var(--mu)}
+h2{margin:0;padding:10px 16px;background:var(--ac);color:var(--on);font-size:14px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;display:flex;justify-content:space-between}
 ul{list-style:none;margin:0;padding:0}
-li a{display:flex;align-items:baseline;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);color:inherit;text-decoration:none}
-li:first-child a{border-top:1px solid var(--line)}
-li a:hover .t,li a:focus-visible .t{color:var(--acc)}
-.t{font-weight:600;white-space:nowrap;transition:color .15s}
-.d{color:var(--mute);font-size:14px;flex:1}
-.ar{color:var(--mute)}
-footer{margin-top:56px;font-size:13px;color:var(--mute)}
-footer a{color:var(--mute)}
-@media (max-width:480px){li a{flex-direction:column;gap:2px}.ar{display:none}}
+li a{display:grid;grid-template-columns:1fr auto;column-gap:16px;padding:16px;border-bottom:4px solid var(--ln);transition:background .15s}
+.t{font-family:'Archivo Black',Impact,sans-serif;font-size:28px;text-transform:uppercase;line-height:1}
+.d{grid-column:1;font-size:14px;margin-top:6px;color:var(--mu)}
+.ar{grid-row:1/3;grid-column:2;font-size:36px;align-self:center;color:var(--mu);transition:color .15s,transform .15s}
+li a:hover,li a:focus-visible{background:#111316;outline:none}
+li a:hover .ar,li a:focus-visible .ar{color:var(--ac);transform:translate(3px,-3px)}
+li a:active{background:#15181c}
+footer{padding:24px 16px 40px;font-size:13px;color:var(--mu)}
+footer a:hover{color:var(--ac)}
 </style>
 </head>
 <body>
 <main>
-  <h1>aannet</h1>
-  <p class="sub">Jeux et expériences web, une page chacun, pensés pour le téléphone.</p>
+  <header>
+    <div class="k">aannet · lab · 6 projets</div>
+    <h1>Jeux <em>&amp;</em><br>expé&shy;riences</h1>
+  </header>
 
-  <h2>Jeux</h2>
+  <h2><span>Jeux</span><span>03</span></h2>
   <ul>
-    <li><a href="app/hyperlane/"><span class="t">HYPERLANE</span><span class="d">Course anti-gravité néon, contre-la-montre 3 tours. En paysage.</span><span class="ar">→</span></a></li>
-    <li><a href="app/derriere-les-lignes/"><span class="t">Derrière les lignes</span><span class="d">Infiltration tactique façon Commandos, une mission complète au doigt.</span><span class="ar">→</span></a></li>
-    <li><a href="app/hors-champ/"><span class="t">Hors champ</span><span class="d">Survival horror isométrique, une lampe et ce qui rôde autour. Prototype.</span><span class="ar">→</span></a></li>
+    <li><a href="app/hyperlane/"><span class="t">HYPERLANE</span><span class="d">Course anti-gravité néon, contre-la-montre 3 tours. En paysage.</span><span class="ar">↗</span></a></li>
+    <li><a href="app/derriere-les-lignes/"><span class="t">Derrière les lignes</span><span class="d">Infiltration tactique façon Commandos, une mission complète au doigt.</span><span class="ar">↗</span></a></li>
+    <li><a href="app/hors-champ/"><span class="t">Hors champ</span><span class="d">Survival horror isométrique. Une lampe, et ce qui rôde. Prototype.</span><span class="ar">↗</span></a></li>
   </ul>
 
-  <h2>Expériences</h2>
+  <h2><span>Expériences</span><span>03</span></h2>
   <ul>
-    <li><a href="app/ascii-cam/"><span class="t">ASCII CAM</span><span class="d">La caméra convertie en caractères ASCII, en direct.</span><span class="ar">→</span></a></li>
-    <li><a href="app/t-vision/"><span class="t">T-VISION</span><span class="d">HUD d'analyse temps réel : filtre thermique, détection et suivi d'objets.</span><span class="ar">→</span></a></li>
-    <li><a href="app/matrix/"><span class="t">Matrix</span><span class="d">Pluie de caractères en PixiJS, première démo du lab.</span><span class="ar">→</span></a></li>
+    <li><a href="app/ascii-cam/"><span class="t">ASCII CAM</span><span class="d">La caméra convertie en caractères ASCII, en direct.</span><span class="ar">↗</span></a></li>
+    <li><a href="app/t-vision/"><span class="t">T-VISION</span><span class="d">HUD d'analyse temps réel : filtre thermique, détection et suivi d'objets.</span><span class="ar">↗</span></a></li>
+    <li><a href="app/matrix/"><span class="t">Matrix</span><span class="d">Pluie de caractères en PixiJS, première démo du lab.</span><span class="ar">↗</span></a></li>
   </ul>
 
   <footer><a href="https://github.com/aannet">github.com/aannet</a></footer>
