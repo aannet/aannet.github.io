@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0d0b09">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Sablier</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d0b09;overflow:hidden;overscroll-behavior:none;
+    touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent}
+  canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
+  #go{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);display:none;
+    padding:16px 40px;font:600 16px/1 system-ui,-apple-system,sans-serif;letter-spacing:.16em;
+    text-transform:uppercase;color:#e8c27a;background:rgba(13,11,9,.6);
+    border:1px solid #c9964a;border-radius:40px;touch-action:manipulation}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="go" type="button">Activer</button>
+<script>
+'use strict';
+/* =====================================================================
+   SABLIER GYROSCOPIQUE EN PARTICULES
+   Sections : 1 init · 2 capteurs · 3 physique · 4 texte vers cibles
+              5 rendu · 6 inputs · 7 perf + boucle
+   ===================================================================== */
+
+/* ===================== 1. INIT ===================== */
+const MAXN = 10000, MINN = 2500;      // capacité max / plancher de l'auto-adaptation
+let   N    = 8000;                    // grains actifs (6 000 à 10 000 au départ)
+
+const D    = 2.2;                     // diamètre physique d'un grain (px CSS)
+const R    = D / 2, D2 = D * D, INV = 1 / D;
+const SUB  = 2;                       // sous-pas physiques par frame
+const G    = 2200;                    // accélération de gravité (px/s²) à 1 g
+const MU   = 0.38;                    // friction de contact (talus ≈ 35°, réglé par test)
+const REST = 0.22;                    // restitution sur les bords
+const MUW  = 0.5;                     // friction sur les bords
+const BG   = 0xff090b0d;              // #0d0b09 en ABGR (little-endian)
+const FONT = '"Arial Black","Helvetica Neue",Arial,system-ui,sans-serif';
+
+const cv  = document.getElementById('c');
+const ctx = cv.getContext('2d', { alpha: false });
+const btn = document.getElementById('go');
+
+let W = 0, H = 0, dpr = 1, Wb = 0, Hb = 0, img = null, buf = null;
+let MINX = R, MAXX = 0, MINY = R, MAXY = 0;
+let cols = 0, rows = 0, head = null;
+
+// Tableaux typés : aucun objet par grain
+const x  = new Float32Array(MAXN), y  = new Float32Array(MAXN);
+const vx = new Float32Array(MAXN), vy = new Float32Array(MAXN);
+const ox = new Float32Array(MAXN), oy = new Float32Array(MAXN);   // positions début de sous-pas
+const tx = new Float32Array(MAXN), ty = new Float32Array(MAXN);   // cibles texte
+const delay = new Float32Array(MAXN);                             // délai avant ressort (s)
+const tAct  = new Uint8Array(MAXN);                               // 1 = a une cible
+const gOf   = new Int16Array(MAXN);                               // glyphe propriétaire (-1 = poussière)
+const tone  = new Uint8Array(MAXN);                               // teinte du grain (or → ocre)
+const sz    = new Uint8Array(MAXN);                               // taille de rendu (px buffer)
+const nxt   = new Int32Array(MAXN);                               // liste chaînée de la grille
+
+// PRNG xorshift32 (plus rapide que Math.random dans les boucles chaudes)
+let _s = 0x9e3779b9 | 0;
+function rnd() { _s ^= _s << 13; _s ^= _s >>> 17; _s ^= _s << 5; return (_s >>> 0) / 4294967296; }
+
+// Table de couleurs : 256 teintes × 16 niveaux de luminosité
+const NL = 16, lut = new Uint32Array(256 * NL);
+(function buildLUT() {
+  for (let t = 0; t < 256; t++) {
+    const u = t / 255;
+    const r0 = 168 + u * 72, g0 = 108 + u * 88, b0 = 46 + u * 72;   // ocre → or
+    for (let l = 0; l < NL; l++) {
+      const f = 0.34 + l * 0.065;
+      let r = r0 * f, g = g0 * f, b = b0 * f;
+      if (f > 1) { const w = (f - 1) * 0.9; r += (255 - r) * w; g += (255 - g) * w; b += (255 - b) * w; }
+      r = r > 255 ? 255 : r; g = g > 255 ? 255 : g; b = b > 255 ? 255 : b;
+      lut[t * NL + l] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    }
+  }
+})();
+
+function initGrains() {
+  for (let i = 0; i < MAXN; i++) {
+    tone[i] = (rnd() * 256) | 0;
+    sz[i]   = Math.max(1, Math.round(dpr * (rnd() < 0.35 ? 2 : 1)));   // 1 à 2 px CSS
+    gOf[i]  = -1; tAct[i] = 0; delay[i] = 0;
+  }
+}
+
+// Tas initial : disque dense centré en (cx, cy)
+function heapAt(cx, cy) {
+  const rad = Math.sqrt(N * D2 * 1.25 / Math.PI);
+  for (let i = 0; i < N; i++) {
+    const a = rnd() * 6.2832, r = Math.sqrt(rnd()) * rad;
+    x[i] = cx + Math.cos(a) * r; y[i] = cy + Math.sin(a) * r * 0.8;
+    x[i] = Math.min(MAXX, Math.max(MINX, x[i])); y[i] = Math.min(MAXY, Math.max(MINY, y[i]));
+    vx[i] = vy[i] = 0; ox[i] = x[i]; oy[i] = y[i];
+  }
+}
+
+function resize() {
+  const nW = Math.max(1, window.innerWidth), nH = Math.max(1, window.innerHeight);
+  const ndpr = Math.min(window.devicePixelRatio || 1, 2);              // plafonné à 2
+  const first = (W === 0);
+  const sx = first ? 1 : nW / W, sy = first ? 1 : nH / H;
+  if (!first) for (let i = 0; i < MAXN; i++) { x[i] *= sx; y[i] *= sy; ox[i] = x[i]; oy[i] = y[i]; }
+  W = nW; H = nH;
+  if (ndpr !== dpr || first) { const od = dpr; dpr = ndpr; for (let i = 0; i < MAXN; i++) sz[i] = Math.max(1, Math.round(dpr * (sz[i] > od * 1.5 ? 2 : 1))); }
+  Wb = Math.floor(W * dpr); Hb = Math.floor(H * dpr);
+  cv.width = Wb; cv.height = Hb;
+  img = ctx.createImageData(Wb, Hb); buf = new Uint32Array(img.data.buffer);
+  MAXX = W - R; MAXY = H - R;
+  cols = Math.ceil(W * INV) + 3; rows = Math.ceil(H * INV) + 3;
+  head = new Int32Array(cols * rows);
+  if (!first && textActive) setText(curStr, true, false);
+}
+
+/* ===================== 2. CAPTEURS ===================== */
+const DEG = Math.PI / 180;
+const gs = { x: 0, y: 1 };            // gravité lissée (repère écran, |g| ≤ 1)
+const gt = { x: 0, y: 1 };            // gravité cible (capteur ou doigt)
+let started = false, sensorOK = false, orientSeen = false, fallback = false;
+let gRate = 0, motionLevel = 0, shakeFlag = 0, lastKick = 0;
+let wl = null;
+
+function screenAngle() {
+  const o = window.screen && screen.orientation;
+  if (o && typeof o.angle === 'number') return o.angle;
+  if (typeof window.orientation === 'number') return (window.orientation + 360) % 360;
+  return 0;
+}
+// (gx, gy) = gravité dans le repère « naturel » du téléphone (x droite, y bas) → repère de l'écran courant
+function setGravityNatural(gx, gy) {
+  const a = screenAngle(); let X, Y;
+  if      (a === 90)  { X =  gy; Y = -gx; }
+  else if (a === 180) { X = -gx; Y = -gy; }
+  else if (a === 270) { X = -gy; Y =  gx; }
+  else                { X =  gx; Y =  gy; }
+  const m = Math.hypot(X, Y); if (m > 1) { X /= m; Y /= m; }
+  gt.x = X; gt.y = Y;
+}
+function onOrient(e) {
+  if (e.beta == null || e.gamma == null) return;     // desktop : événement unique à valeurs nulles
+  orientSeen = sensorOK = true; fallback = false;
+  const b = e.beta * DEG, g = e.gamma * DEG;
+  // gravité en repère appareil : (cosβ·sinγ, sinβ) une fois l'axe y passé en coordonnées canvas
+  setGravityNatural(Math.cos(b) * Math.sin(g), Math.sin(b));
+}
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function onMotion(e) {
+  const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+  const l = e.acceleration;
+  let dev = (l && l.x != null) ? Math.hypot(l.x, l.y, l.z) : Math.abs(Math.hypot(a.x, a.y, a.z) - 9.81);
+  if (dev > motionLevel) motionLevel = dev;
+  const t = performance.now();
+  if (dev > 13 && t - lastKick > 300) { lastKick = t; shakeFlag = Math.min(1, (dev - 10) / 25); }
+  if (!orientSeen) {                                  // gravité via accéléromètre si pas d'orientation
+    const s = isIOS ? -1 : 1;
+    sensorOK = true; fallback = false;
+    setGravityNatural(-s * a.x / 9.81, s * a.y / 9.81);
+  }
+}
+async function lockScreen() {
+  try {
+    if ('wakeLock' in navigator && !wl) {
+      wl = await navigator.wakeLock.request('screen');
+      wl.addEventListener('release', () => { wl = null; });
+    }
+  } catch (e) { /* refus silencieux */ }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && started) lockScreen(); });
+
+function startSensors() {
+  if (started) return; started = true;
+  window.addEventListener('deviceorientation', onOrient, true);
+  window.addEventListener('devicemotion', onMotion, true);
+  lockScreen();
+  // Aucun capteur exploitable après 1,5 s → fallback tactile, gravité « à plat »
+  setTimeout(() => { if (!sensorOK) { fallback = true; gt.x = 0; gt.y = 0; } }, 1500);
+}
+function startFallbackOnly() { started = true; fallback = true; gt.x = gt.y = 0; lockScreen(); }
+
+const needPerm = typeof DeviceOrientationEvent !== 'undefined' &&
+                 typeof DeviceOrientationEvent.requestPermission === 'function';
+if (needPerm) {                                       // iOS 13+ : geste obligatoire
+  btn.style.display = 'block';
+  btn.addEventListener('click', () => {
+    btn.style.display = 'none';
+    let p1 = null, p2 = null;                         // les deux demandes dans le même geste
+    try { p1 = DeviceOrientationEvent.requestPermission(); } catch (e) {}
+    try { if (typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission) p2 = DeviceMotionEvent.requestPermission(); } catch (e) {}
+    Promise.all([p1, p2].map(p => p ? p.catch(() => 'denied') : Promise.resolve('n/a'))).then(r => {
+      if (r[0] === 'granted' || r[1] === 'granted') startSensors(); else startFallbackOnly();
+    });
+  });
+} else {
+  startSensors();                                     // Android et autres : démarrage direct
+}
+
+/* ===================== 3. PHYSIQUE ===================== */
+function buildGrid() {
+  head.fill(-1);
+  for (let i = 0; i < N; i++) {
+    let cx = ((x[i] * INV) | 0) + 1, cy = ((y[i] * INV) | 0) + 1;
+    cx = cx < 1 ? 1 : (cx > cols - 2 ? cols - 2 : cx);
+    cy = cy < 1 ? 1 : (cy > rows - 2 ? rows - 2 : cy);
+    const c = cy * cols + cx;
+    nxt[i] = head[c]; head[c] = i;
+  }
+}
+
+// Tri des grains selon leur hauteur le long de la gravité (tri par comptage, bas du tas en premier).
+// Un seul balayage bas → haut propage alors le support à travers toute la pile (pas d'affaissement).
+const NB = 4096, bcount = new Int32Array(NB + 1), bkey = new Int32Array(MAXN);
+const ord = new Int32Array(MAXN), rank = new Int32Array(MAXN);
+function sortByGravity(ux, uy) {
+  const p0 = 0, p1 = W * ux, p2 = H * uy, p3 = W * ux + H * uy;
+  const pmax = Math.max(p0, p1, p2, p3), pmin = Math.min(p0, p1, p2, p3);
+  const sc = (NB - 1) / Math.max(1, pmax - pmin);
+  bcount.fill(0);
+  for (let i = 0; i < N; i++) {
+    let k = ((pmax - (x[i] * ux + y[i] * uy)) * sc) | 0;
+    k = k < 0 ? 0 : (k > NB - 1 ? NB - 1 : k);
+    bkey[i] = k; bcount[k + 1]++;
+  }
+  for (let k = 0; k < NB; k++) bcount[k + 1] += bcount[k];
+  for (let i = 0; i < N; i++) { const r = bcount[bkey[i]]++; ord[r] = i; rank[i] = r; }
+}
+
+// Résolution des contacts : un grain n'est repoussé que par les grains « en dessous » (déjà placés).
+// Position : séparation directe. Vitesse : composante normale entrante annulée (inélastique) puis
+// friction de Coulomb (bornée par MU × impulsion normale) → talus d'angle ≈ atan(MU).
+function solveContacts(damp) {
+  for (let r0 = 0; r0 < N; r0++) {
+    const i = ord[r0];
+    let xi = x[i], yi = y[i], vX = vx[i], vY = vy[i];
+    let cx = ((xi * INV) | 0) + 1, cy = ((yi * INV) | 0) + 1;
+    cx = cx < 1 ? 1 : (cx > cols - 2 ? cols - 2 : cx);
+    cy = cy < 1 ? 1 : (cy > rows - 2 ? rows - 2 : cy);
+    const base = cy * cols + cx;
+    for (let r = -1; r <= 1; r++) {
+      const rb = base + r * cols;
+      for (let c = -1; c <= 1; c++) {
+        let j = head[rb + c];
+        while (j !== -1) {
+          if (rank[j] < r0) {
+            const dx = xi - x[j], dy = yi - y[j], d2 = dx * dx + dy * dy;
+            if (d2 < D2) {
+              let d = Math.sqrt(d2), nx, ny;
+              if (d < 1e-4) { const a = rnd() * 6.2832; nx = Math.cos(a); ny = Math.sin(a); d = 0; }
+              else { nx = dx / d; ny = dy / d; }
+              const pen = D - d;
+              xi += nx * pen; yi += ny * pen;
+              const rx = vX - vx[j], ry = vY - vy[j], vn = rx * nx + ry * ny;
+              if (vn < 0) {
+                vX -= vn * nx; vY -= vn * ny;
+                const ttx = rx - vn * nx, tty = ry - vn * ny, tl = Math.sqrt(ttx * ttx + tty * tty);
+                if (tl > 1e-6) { const f = Math.min(tl, -MU * vn) / tl; vX -= ttx * f; vY -= tty * f; }
+              }
+            }
+          }
+          j = nxt[j];
+        }
+      }
+    }
+    // bords : projection + rebond amorti + friction tangentielle
+    if (xi < MINX)      { xi = MINX; if (vX < 0) { const vn = vX; vX = vn < -40 ? -vn * REST : 0; vY = wf(vY, vn); } }
+    else if (xi > MAXX) { xi = MAXX; if (vX > 0) { const vn = vX; vX = vn >  40 ? -vn * REST : 0; vY = wf(vY, vn); } }
+    if (yi < MINY)      { yi = MINY; if (vY < 0) { const vn = vY; vY = vn < -40 ? -vn * REST : 0; vX = wf(vX, vn); } }
+    else if (yi > MAXY) { yi = MAXY; if (vY > 0) { const vn = vY; vY = vn >  40 ? -vn * REST : 0; vX = wf(vX, vn); } }
+    x[i] = xi; y[i] = yi; vx[i] = vX * damp; vy[i] = vY * damp;
+  }
+}
+// friction de paroi : réduit la vitesse tangentielle vt de MUW × |vitesse normale absorbée|
+function wf(vt, vn) { const m = Math.abs(vt), c = MUW * Math.abs(vn); return m <= c ? 0 : vt - Math.sign(vt) * c; }
+
+function stepSand(dt) {
+  const h = dt / SUB, ax = gs.x * G * h, ay = gs.y * G * h, damp = 1 - 0.25 * h;
+  const gm = Math.hypot(gs.x, gs.y), ux = gm > 0.05 ? gs.x / gm : 0, uy = gm > 0.05 ? gs.y / gm : 1;
+  for (let s = 0; s < SUB; s++) {
+    for (let i = 0; i < N; i++) {                     // intégration
+      let a = vx[i] + ax, b = vy[i] + ay; const q = a * a + b * b;
+      if (q > 810000) { const f = 900 / Math.sqrt(q); a *= f; b *= f; }      // plafond anti-tunnel
+      vx[i] = a; vy[i] = b;
+      x[i] += vx[i] * h; y[i] += vy[i] * h;
+    }
+    buildGrid();
+    sortByGravity(ux, uy);
+    solveContacts(damp);
+  }
+  for (let i = 0; i < N; i++) { ox[i] = x[i]; oy[i] = y[i]; }
+}
+
+// Mode texte : pas de collisions, ressort amorti + bruit vers la cible
+function stepText(dt) {
+  const K = 49, C = 9.8, NA = 700, ND = 1600;
+  const dragF = Math.exp(-1.6 * dt), dustD = Math.exp(-1.2 * dt);
+  for (let i = 0; i < N; i++) {
+    let vX = vx[i], vY = vy[i], xi = x[i], yi = y[i];
+    if (tAct[i] === 1) {
+      if (delay[i] > 0) { delay[i] -= dt; vX *= dragF; vY *= dragF; }      // désagrégation / pluie
+      else {
+        vX += (K * (tx[i] - xi) - C * vX + (rnd() - 0.5) * NA) * dt;
+        vY += (K * (ty[i] - yi) - C * vY + (rnd() - 0.5) * NA) * dt;
+      }
+    } else {                                                               // poussière flottante
+      vX = (vX + (rnd() - 0.5) * ND * dt) * dustD; vY = (vY + (rnd() - 0.5) * ND * dt) * dustD;
+    }
+    xi += vX * dt; yi += vY * dt;
+    if (xi < MINX) { xi = MINX; vX = Math.abs(vX) * 0.3; } else if (xi > MAXX) { xi = MAXX; vX = -Math.abs(vX) * 0.3; }
+    if (yi < MINY) { yi = MINY; vY = Math.abs(vY) * 0.3; } else if (yi > MAXY) { yi = MAXY; vY = -Math.abs(vY) * 0.3; }
+    x[i] = xi; y[i] = yi; vx[i] = vX; vy[i] = vY; ox[i] = xi; oy[i] = yi;
+  }
+}
+
+// Secousse : injecte de l'énergie dans tous les grains
+function kick(power) {
+  const amp = 260 + 1100 * power;
+  for (let i = 0; i < N; i++) {
+    const a = rnd() * 6.2832, m = (0.4 + rnd() * 0.6) * amp;
+    vx[i] += Math.cos(a) * m; vy[i] += Math.sin(a) * m;
+  }
+}
+
+/* ===================== 4. TEXTE VERS CIBLES ===================== */
+const mc = document.createElement('canvas');
+const mx = mc.getContext('2d', { willReadFrequently: true });
+let curGlyphs = null, curStr = '', textActive = false;
+let mode = 0, custom = '', stillT = 0;                  // mode: 0 heure, 1 « SABLE », 2 saisi
+const pad2 = n => (n < 10 ? '0' : '') + n;
+function getStr() {
+  if (mode === 0) { const d = new Date(); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  return mode === 1 ? 'SABLE' : (custom || 'SABLE');
+}
+
+// Mise en page (portrait : HH / MM empilés), rendu hors écran, échantillonnage des points par glyphe
+function layoutText(str, isTime) {
+  let lines;
+  if (isTime) lines = (W >= H * 1.1) ? [str] : [str.slice(0, 2), str.slice(3, 5)];
+  else { const w = str.trim().split(/\s+/); lines = (w.length > 1 && w.length <= 3 && H > W) ? w : [str.trim()]; }
+  mc.width = W; mc.height = H;
+  const REF = 100; mx.font = 'bold ' + REF + 'px ' + FONT;
+  const zeroW = mx.measureText('0').width;
+  const adv = ch => ((ch >= '0' && ch <= '9') ? zeroW : mx.measureText(ch).width) + 7;   // chiffres tabulaires
+  let maxLW = 1;
+  for (const ln of lines) { let s = 0; for (const ch of ln) s += adv(ch); if (s > maxLW) maxLW = s; }
+  const lineK = 0.85;
+  const fs = Math.min(W * 0.88 / maxLW * REF, H * 0.72 / (lines.length * lineK));
+  const k = fs / REF, lineH = fs * lineK, top = (H - lines.length * lineH) / 2;
+  mx.font = 'bold ' + fs + 'px ' + FONT;
+  mx.textAlign = 'center'; mx.textBaseline = 'middle';
+  mx.fillStyle = mx.strokeStyle = '#fff'; mx.lineWidth = fs * 0.035; mx.lineJoin = 'round';
+  const glyphs = [];
+  lines.forEach((ln, li) => {
+    let lw = 0; for (const ch of ln) lw += adv(ch) * k;
+    let gx = (W - lw) / 2; const cy = top + (li + 0.5) * lineH;
+    let ci = 0;
+    for (const ch of ln) {
+      const a = adv(ch) * k;
+      if (ch !== ' ') { mx.fillText(ch, gx + a / 2, cy); mx.strokeText(ch, gx + a / 2, cy); }
+      glyphs.push({ key: W + 'x' + H + '|' + lines.length + '|' + li + '.' + ci + '|' + ch,
+                    x0: gx, x1: gx + a, y0: cy - lineH / 2, y1: cy + lineH / 2, pts: null });
+      gx += a; ci++;
+    }
+  });
+  const al = mx.getImageData(0, 0, W, H).data;
+  let cov = 0;
+  for (let yy = 0; yy < H; yy += 2) for (let xx = 0; xx < W; xx += 2) if (al[(yy * W + xx) * 4 + 3] > 128) cov++;
+  cov *= 4;
+  const s = Math.max(1.5, Math.sqrt(cov / (0.8 * N)));   // pas d'échantillonnage : ~80 % des grains ont une cible
+  for (const g of glyphs) {
+    const p = [];
+    for (let gy = Math.max(0, g.y0); gy < Math.min(H, g.y1); gy += s)
+      for (let gx2 = Math.max(0, g.x0); gx2 < Math.min(W, g.x1); gx2 += s) {
+        const px = gx2 + rnd() * s, py = gy + rnd() * s, ix = px | 0, iy = py | 0;
+        if (ix < W && iy < H && al[(iy * W + ix) * 4 + 3] > 128) p.push(px, py);
+      }
+    g.pts = p;
+  }
+  return glyphs;
+}
+
+// Affecte les grains aux points. full=true : tout est réassigné ; sinon seuls les glyphes modifiés
+// sont désagrégés puis recomposés (explode = éclatement visible, sinon simple départ échelonné).
+function setText(str, full, explode) {
+  const glyphs = layoutText(str, mode === 0);
+  const BAND = 24;
+  let keep = null;
+  if (!full && curGlyphs && curGlyphs.length === glyphs.length) {
+    keep = new Uint8Array(glyphs.length);
+    for (let k = 0; k < glyphs.length; k++) keep[k] = curGlyphs[k].key === glyphs[k].key ? 1 : 0;
+  }
+  if (!keep) for (let i = N; i < MAXN; i++) { gOf[i] = -1; tAct[i] = 0; }
+  let rel = [], dust = [];
+  for (let i = 0; i < N; i++) {
+    if (!keep) rel.push(i);
+    else { const g = gOf[i]; if (g < 0) dust.push(i); else if (!keep[g]) rel.push(i); }
+  }
+  // points des glyphes à (re)former
+  const PX = [], PY = [], PG = [];
+  for (let k = 0; k < glyphs.length; k++) {
+    if (keep && keep[k]) continue;
+    const p = glyphs[k].pts;
+    for (let q = 0; q < p.length; q += 2) { PX.push(p[q]); PY.push(p[q + 1]); PG.push(k); }
+  }
+  let K = PX.length;
+  if (rel.length < K) {                                // complète le pool avec de la poussière
+    for (let i = dust.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; const t = dust[i]; dust[i] = dust[j]; dust[j] = t; }
+    while (rel.length < K && dust.length) rel.push(dust.pop());
+  }
+  const M = rel.length;
+  if (K > M) K = M;                                    // trop de points : on tronque
+  if (explode) for (const i of rel) {                  // désagrégation
+    const a = rnd() * 6.2832, m = 120 + rnd() * 300; vx[i] = Math.cos(a) * m; vy[i] = Math.sin(a) * m;
+  }
+  // Appariement par rang : tri (bande, x) des points et des grains → trajectoires sans croisements chaotiques
+  const pk = new Float64Array(K), gk = new Float64Array(M);
+  for (let k = 0; k < K; k++) pk[k] = (Math.floor(PY[k] / BAND) * 2048 + Math.min(2047, Math.floor(PX[k]))) * 16384 + k;
+  for (let m = 0; m < M; m++) {
+    const i = rel[m]; gk[m] = (Math.floor(Math.max(0, y[i]) / BAND) * 2048 + Math.min(2047, Math.floor(Math.max(0, x[i])))) * 16384 + m;
+  }
+  pk.sort(); gk.sort();
+  const used = new Uint8Array(M);
+  for (let k = 0; k < K; k++) {
+    const kk = pk[k] % 16384, mi = Math.floor(k * M / K), m = gk[mi] % 16384, i = rel[m];
+    used[m] = 1;
+    tx[i] = PX[kk]; ty[i] = PY[kk]; tAct[i] = 1; gOf[i] = PG[kk];
+    delay[i] = explode ? 0.45 + rnd() * 0.45 : rnd() * 0.4;
+  }
+  for (let m = 0; m < M; m++) if (!used[m]) {          // grains en trop : poussière
+    const i = rel[m]; tAct[i] = 0; gOf[i] = -1;
+    if (!explode) { vx[i] += (rnd() - 0.5) * 80; vy[i] += (rnd() - 0.5) * 80; }
+  }
+  curGlyphs = glyphs; curStr = str;
+}
+
+function enterText() { textActive = true; setText(curStr = getStr(), true, false); }
+function exitText()  { textActive = false; stillT = 0; }
+
+/* ===================== 5. RENDU ===================== */
+let frame = 0;
+function render() {
+  buf.fill(BG);                                        // fond #0d0b09
+  const d = dpr, tm = textActive, tw = Wb, th = Hb, fh = frame >> 3;
+  for (let i = 0; i < N; i++) {
+    const a = vx[i], b = vy[i], sp = Math.sqrt(a * a + b * b);
+    let L;
+    if (tm) {
+      if (tAct[i] === 1 && delay[i] <= 0) { L = 8; if ((Math.imul(i ^ fh, 2654435761) >>> 30) === 0) L += 3; }
+      else L = 5;
+    } else L = 3;                                      // au repos : sombre
+    L += sp * 0.025;                                   // en mouvement : plus clair
+    L = L > 15 ? 15 : L | 0;
+    const s = sz[i], t = tone[i] * NL;
+    let px = (x[i] * d - s * 0.5) | 0, py = (y[i] * d - s * 0.5) | 0;
+    if (px < 0) px = 0; else if (px > tw - s) px = tw - s;
+    if (py < 0) py = 0; else if (py > th - s) py = th - s;
+    if (L >= 12 && px > 0 && py > 0 && px < tw - s - 1 && py < th - s - 1) {   // lueur grains rapides
+      const hc = lut[t + 5], s2 = s + 2;
+      for (let yy = 0; yy < s2; yy++) { const row = (py - 1 + yy) * tw + px - 1; for (let xx = 0; xx < s2; xx++) buf[row + xx] = hc; }
+    }
+    const col = lut[t + L];
+    for (let yy = 0; yy < s; yy++) { const row = (py + yy) * tw + px; for (let xx = 0; xx < s; xx++) buf[row + xx] = col; }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ===================== 6. INPUTS ===================== */
+const pt = { a: false, id: 0, sx: 0, sy: 0, drag: false, long: false, timer: 0 };
+let tapTimer = 0;
+
+function rain() {                                      // pluie depuis le « haut » selon la gravité
+  let ux = gs.x, uy = gs.y; const m = Math.hypot(ux, uy);
+  if (m < 0.2) { ux = 0; uy = 1; } else { ux /= m; uy /= m; }
+  const K = Math.min(900, (N * 0.12) | 0), tm = textActive;
+  for (let q = 0; q < K; q++) {
+    const i = (rnd() * N) | 0, depth = rnd() * 60;
+    if (Math.abs(ux) >= Math.abs(uy)) { x[i] = ux > 0 ? R + depth : W - R - depth; y[i] = rnd() * H; }
+    else { y[i] = uy > 0 ? R + depth : H - R - depth; x[i] = rnd() * W; }
+    const v = (tm ? 450 : 120) + rnd() * 220;
+    vx[i] = ux * v; vy[i] = uy * v; ox[i] = x[i]; oy[i] = y[i];
+    if (tm) delay[i] = 1.1 + rnd() * 0.9;
+  }
+}
+function heap() { exitText(); stillT = -2; curGlyphs = null; heapAt(W / 2, H / 2); }   // -2 : le tas reste visible 3 s à plat
+function cycleText() {
+  mode = (mode + 1) % 3;
+  if (mode === 2) {
+    pt.a = false; clearTimeout(pt.timer); clearTimeout(tapTimer); tapTimer = 0;   // prompt() avale le pointerup
+    let v = null; try { v = window.prompt('Texte à former en sable :', custom || ''); } catch (e) {}
+    if (v && v.trim()) custom = v.trim().slice(0, 24); else mode = 0;
+  }
+  if (textActive) setText(getStr(), true, true);
+}
+
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => {
+  if (pt.a) return;
+  pt.a = true; pt.id = e.pointerId; pt.sx = e.clientX; pt.sy = e.clientY; pt.drag = false; pt.long = false;
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+  clearTimeout(pt.timer);
+  pt.timer = setTimeout(() => { if (pt.a && !pt.drag) { pt.long = true; cycleText(); } }, 600);   // appui long
+  lockScreen();
+});
+cv.addEventListener('pointermove', e => {
+  if (!pt.a || e.pointerId !== pt.id) return;
+  if (!pt.drag && Math.hypot(e.clientX - pt.sx, e.clientY - pt.sy) > 14) { pt.drag = true; clearTimeout(pt.timer); }
+  if (pt.drag && fallback) {                           // fallback tactile : vecteur centre → doigt
+    let gx = (e.clientX - W / 2) / (0.28 * Math.min(W, H)), gy = (e.clientY - H / 2) / (0.28 * Math.min(W, H));
+    const m = Math.hypot(gx, gy); if (m > 1) { gx /= m; gy /= m; }
+    gt.x = gx; gt.y = gy;
+  }
+});
+function endPointer(e, cancelled) {
+  if (!pt.a || e.pointerId !== pt.id) return;
+  pt.a = false; clearTimeout(pt.timer);
+  if (pt.drag) { if (fallback) { gt.x = 0; gt.y = 0; } }          // relâché : retour à plat
+  else if (!pt.long && !cancelled) {                               // tap / double tap
+    if (tapTimer) { clearTimeout(tapTimer); tapTimer = 0; heap(); }
+    else tapTimer = setTimeout(() => { tapTimer = 0; rain(); }, 260);
+  }
+}
+cv.addEventListener('pointerup', e => endPointer(e, false));
+cv.addEventListener('pointercancel', e => endPointer(e, true));
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+/* ===================== 7. PERF + BOUCLE ===================== */
+let last = 0, lowT = 0, fpsEma = 60, textCheck = 0, graceT = 2;
+
+function adaptPerf(dt) {
+  if (!(dt > 0) || dt > 0.2) return;                   // onglet masqué / pause : on ignore
+  fpsEma += (1 / dt - fpsEma) * 0.1;
+  if (graceT > 0) { graceT -= dt; return; }
+  if (fpsEma < 45) lowT += dt; else lowT = 0;
+  if (lowT >= 2 && N > MINN) {                         // FPS < 45 pendant 2 s : -20 % de grains
+    N = Math.max(MINN, Math.floor(N * 0.8)); lowT = 0; graceT = 2; fpsEma = 60;
+    if (textActive) setText(curStr, true, false);
+  }
+}
+
+function updateState(dt) {
+  // gravité lissée (passe-bas, constante de temps 70 ms)
+  const a = 1 - Math.exp(-dt / 0.07), px = gs.x, py = gs.y;
+  gs.x += (gt.x - gs.x) * a; gs.y += (gt.y - gs.y) * a;
+  gRate += (Math.hypot(gs.x - px, gs.y - py) / dt - gRate) * 0.15;
+  motionLevel *= Math.exp(-dt / 0.4);
+
+  if (shakeFlag) { kick(shakeFlag); shakeFlag = 0; if (textActive) exitText(); stillT = 0; }
+
+  const gm = Math.hypot(gs.x, gs.y);
+  if (!textActive) {
+    // à plat (<15 % de g) et immobile pendant 1 s → le texte se forme
+    const calm = gm < 0.15 && gRate < 0.25 && motionLevel < 2.5;
+    stillT = calm ? stillT + dt : 0;
+    if (stillT >= 1) enterText();
+  } else if (gm > 0.174) {                             // > 10° d'inclinaison : le texte se brise
+    exitText();
+  }
+
+  // mise à jour de la minute (ou du texte) : seuls les glyphes modifiés se recomposent
+  textCheck -= dt;
+  if (textCheck <= 0) {
+    textCheck = 0.25;
+    const s = getStr();
+    if (s !== curStr) { if (textActive) setText(s, false, true); else curStr = s; }
+  }
+}
+
+function loop(t) {
+  requestAnimationFrame(loop);
+  const raw = last ? (t - last) / 1000 : 1 / 60; last = t;
+  const dt = Math.min(0.033, Math.max(0.001, raw));
+  adaptPerf(raw);
+  updateState(dt);
+  if (textActive) stepText(dt); else stepSand(dt);
+  render();
+  frame++;
+}
+
+// Démarrage
+resize();
+initGrains();
+curStr = getStr();
+heapAt(W / 2, H * 0.3);                                // le sable tombe au lancement
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
