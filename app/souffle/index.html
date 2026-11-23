@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Souffle</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;
+    overscroll-behavior:none;-webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+  canvas{position:fixed;left:0;top:0;display:block;touch-action:none}
+
+  /* vu-mètre fin (volume en haut, planéité dessous) + repères de seuil */
+  #meter{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);height:6px;pointer-events:none;z-index:5}
+  #meter i{position:absolute;left:0;width:100%;height:2px;transform-origin:0 50%;transform:scaleX(0)}
+  #mv{top:0;background:linear-gradient(90deg,#4f9dff,#d6ebff)}
+  #mf{top:4px;background:#ffcf8a}
+  #meter b{position:absolute;width:1px;height:2px;background:rgba(255,255,255,.8)}
+  #tv{top:0}#tf{top:4px}
+  #mv.calib{animation:calib .5s ease-in-out infinite alternate}
+  @keyframes calib{from{opacity:.25}to{opacity:.9}}
+
+  /* barre du bas : champ + micro */
+  #bar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:12px;align-items:center;
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));z-index:5}
+  #txt{flex:1;min-width:0;box-sizing:border-box;background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.14);border-radius:23px;color:#e8f1ff;
+    font:600 16px/1 system-ui,-apple-system,sans-serif;letter-spacing:.14em;text-align:center;
+    padding:14px;outline:none;-webkit-appearance:none;appearance:none;
+    -webkit-user-select:text;user-select:text;caret-color:#9fd0ff}
+  #txt:focus{border-color:rgba(159,208,255,.5)}
+  #mic{flex:none;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.25);
+    background:rgba(255,255,255,.05);color:#cfe3ff;display:grid;place-items:center;padding:0;
+    position:relative;cursor:pointer;-webkit-appearance:none;appearance:none}
+  #mic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  #mic.on{color:#9fd0ff;border-color:rgba(159,208,255,.7);box-shadow:0 0 14px rgba(120,180,255,.45)}
+  #mic.off{color:#8a93a3}
+  #mic.off::after{content:"";position:absolute;left:11px;right:11px;top:50%;height:1.6px;background:currentColor;transform:rotate(-45deg)}
+  #mic.attend::before{content:"";position:absolute;inset:-5px;border-radius:50%;
+    border:1px solid rgba(159,208,255,.55);animation:pulse 1.6s ease-out infinite}
+  @keyframes pulse{from{transform:scale(.85);opacity:.9}to{transform:scale(1.35);opacity:0}}
+
+  /* panneau de réglages (triple tap) : 1er curseur = sensibilité, 2e = planéité */
+  #panel{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(78px + env(safe-area-inset-bottom,0px));width:min(76vw,320px);display:none;
+    flex-direction:column;gap:12px;padding:16px 18px;background:rgba(10,14,22,.8);
+    border:1px solid rgba(255,255,255,.12);border-radius:16px;
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);z-index:6}
+  #panel.show{display:flex}
+  #panel input{width:100%;margin:0;height:24px}
+  #sens{accent-color:#7fb8ff}
+  #flat{accent-color:#ffcf8a}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="meter"><i id="mv"></i><i id="mf"></i><b id="tv"></b><b id="tf"></b></div>
+
+<div id="panel">
+  <input id="sens" type="range" min="0.3" max="3" step="0.05" value="1" aria-label="sensibilité">
+  <input id="flat" type="range" min="0.02" max="0.6" step="0.01" value="0.12" aria-label="seuil de planéité">
+</div>
+
+<form id="bar" autocomplete="off">
+  <input id="txt" type="text" maxlength="20" value="SOUFFLE" enterkeyhint="done"
+         autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="texte">
+  <button id="mic" type="button" class="attend" aria-label="micro">
+    <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+  </button>
+</form>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+ * 1. INIT : constantes, état global, tableaux typés
+ * ===================================================================== */
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d', { alpha: false });
+const inp = $('txt'), micBtn = $('mic'), panel = $('panel'), form = $('bar');
+const sSens = $('sens'), sFlat = $('flat');
+const mvBar = $('mv'), mfBar = $('mf'), tickV = $('tv'), tickF = $('tf');
+
+const CFG = {
+  cible: 11000,        // nombre de particules visé (8 000 à 15 000)
+  max: 16000,          // capacité des tableaux
+  min: 3000,           // plancher de l'auto-adaptation
+  alphaTrace: 0.2,     // traînée : alpha du fond noir redessiné
+  seuilSouffle: 0.15,  // intensité à partir de laquelle ça se détache
+  silenceRetour: 0.8,  // s sans souffle avant la reformation
+  vent: 650,           // accélération du vent (px/s²)
+  turbulence: 650,     // amplitude de la turbulence (px/s²)
+  trainee: 1.1,        // frottement de l'air (1/s)
+  gravite: 90          // petite chute de sable (px/s²)
+};
+
+let W = 0, H = 0, dpr = 1;
+let curText = 'SOUFFLE';
+let N = 0;                       // nombre de particules actives
+const MAXN = CFG.max;
+
+// Une seule paire de tableaux par propriété, pas d'objet par particule
+const P = {
+  hx: new Float32Array(MAXN), hy: new Float32Array(MAXN),   // position d'origine
+  x:  new Float32Array(MAXN), y:  new Float32Array(MAXN),   // position courante
+  vx: new Float32Array(MAXN), vy: new Float32Array(MAXN),   // vitesse
+  sz: new Float32Array(MAXN),                               // taille
+  thr: new Float32Array(MAXN),                              // seuil de détachement
+  gain: new Float32Array(MAXN),                             // sensibilité au vent
+  ph: new Float32Array(MAXN),                               // phase du tremblement
+  kr: new Float32Array(MAXN),                               // raideur du ressort de retour
+  rw: new Float32Array(MAXN),                               // attente avant retour
+  tint: new Uint8Array(MAXN),                               // teinte 0..3
+  st: new Uint8Array(MAXN)                                  // 0 repos, 1 emporté, 2 retour
+};
+const ARR = Object.values(P);
+
+// Réglages persistés
+const settings = { sens: 1, flat: 0.12 };
+try {
+  const s = JSON.parse(localStorage.getItem('souffle-reglages') || 'null');
+  if (s) { settings.sens = +s.sens || 1; settings.flat = +s.flat || 0.12; }
+} catch (e) {}
+sSens.value = settings.sens; sFlat.value = settings.flat;
+
+// Bruit simplex 2D (Gustavson), table de permutation fixe
+const perm = new Uint8Array(512);
+(function () {
+  const p = new Uint8Array(256); for (let i = 0; i < 256; i++) p[i] = i;
+  let s = 1337;
+  for (let i = 255; i > 0; i--) { s = (s * 16807) % 2147483647; const j = s % (i + 1); const t = p[i]; p[i] = p[j]; p[j] = t; }
+  for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+})();
+const GX = [1, -1, 1, -1, 1, -1, 0, 0], GY = [1, 1, -1, -1, 0, 0, 1, -1];
+const F2 = 0.5 * (Math.sqrt(3) - 1), G2 = (3 - Math.sqrt(3)) / 6;
+function noise2(xin, yin) {
+  const s = (xin + yin) * F2;
+  let i = Math.floor(xin + s), j = Math.floor(yin + s);
+  const t = (i + j) * G2;
+  const x0 = xin - (i - t), y0 = yin - (j - t);
+  const i1 = x0 > y0 ? 1 : 0, j1 = x0 > y0 ? 0 : 1;
+  const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2, x2 = x0 - 1 + 2 * G2, y2 = y0 - 1 + 2 * G2;
+  i &= 255; j &= 255;
+  const g0 = perm[i + perm[j]] & 7, g1 = perm[i + i1 + perm[j + j1]] & 7, g2 = perm[i + 1 + perm[j + 1]] & 7;
+  let n0 = 0, n1 = 0, n2 = 0, t0 = 0.5 - x0 * x0 - y0 * y0;
+  if (t0 > 0) { t0 *= t0; n0 = t0 * t0 * (GX[g0] * x0 + GY[g0] * y0); }
+  let t1 = 0.5 - x1 * x1 - y1 * y1;
+  if (t1 > 0) { t1 *= t1; n1 = t1 * t1 * (GX[g1] * x1 + GY[g1] * y1); }
+  let t2 = 0.5 - x2 * x2 - y2 * y2;
+  if (t2 > 0) { t2 *= t2; n2 = t2 * t2 * (GX[g2] * x2 + GY[g2] * y2); }
+  return 70 * (n0 + n1 + n2);
+}
+
+// Dimensionnement du canvas (dpr plafonné à 2)
+function setup() {
+  W = Math.round(window.innerWidth); H = Math.round(window.innerHeight);
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+}
+
+/* =====================================================================
+ * 2. TEXTE VERS PARTICULES
+ * ===================================================================== */
+const off = document.createElement('canvas');
+const octx = off.getContext('2d', { willReadFrequently: true });
+const FAMILY = '"Arial Black","Helvetica Neue",Impact,Arial,sans-serif';
+
+// Coupe sur deux lignes si le texte est long (plus lisible sur portrait)
+function splitLines(t) {
+  if (t.length <= 12) return [t];
+  const mid = t.length / 2;
+  let best = -1, bd = 1e9;
+  for (let i = 0; i < t.length; i++) if (t[i] === ' ' && Math.abs(i - mid) < bd) { bd = Math.abs(i - mid); best = i; }
+  if (best > 0) return [t.slice(0, best).trim(), t.slice(best + 1).trim()];
+  return [t.slice(0, Math.ceil(mid)), t.slice(Math.ceil(mid))];
+}
+
+// Rend le texte hors écran, échantillonne les pixels opaques, remplit les tableaux.
+// scatter = true : les particules arrivent de partout et se rassemblent.
+function build(text, scatter) {
+  curText = text;
+  const lines = splitLines(text);
+  off.width = W; off.height = H;
+  octx.clearRect(0, 0, W, H);
+  octx.font = '900 100px ' + FAMILY;
+  let wmax = 1;
+  for (const l of lines) wmax = Math.max(wmax, octx.measureText(l).width);
+  let fs = Math.min(100 * (W * 0.9) / wmax, H * 0.22);
+  const lh = fs * 1.05, cy = H * 0.44;
+  octx.font = '900 ' + fs + 'px ' + FAMILY;
+  octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillStyle = '#fff';
+  const y0 = cy - (lines.length - 1) * lh / 2;
+  lines.forEach((l, i) => octx.fillText(l, W / 2, y0 + i * lh));
+
+  const wText = wmax * fs / 100, xmin = W / 2 - wText / 2;
+  const img = octx.getImageData(0, 0, W, H).data;
+
+  // 1er passage : combien de pixels opaques ?
+  let cnt = 0;
+  for (let i = 3; i < img.length; i += 4) if (img[i] > 128) cnt++;
+  const p = Math.min(1, CFG.cible / Math.max(cnt, 1));
+
+  // 2e passage : colonne par colonne (index ~ position x), tirage aléatoire
+  let n = 0;
+  for (let x = 0; x < W && n < MAXN; x++) {
+    const rank = Math.min(1, Math.max(0, (x - xmin) / Math.max(wText, 1)));
+    for (let y = 0; y < H && n < MAXN; y++) {
+      if (img[(y * W + x) * 4 + 3] > 128 && Math.random() < p) {
+        const hx = x + Math.random(), hy = y + Math.random();
+        P.hx[n] = hx; P.hy[n] = hy;
+        if (scatter) {
+          P.x[n] = Math.random() * W; P.y[n] = Math.random() * H;
+          P.st[n] = 2; P.rw[n] = Math.random() * 0.5;
+        } else { P.x[n] = hx; P.y[n] = hy; P.st[n] = 0; P.rw[n] = 0; }
+        P.vx[n] = 0; P.vy[n] = 0;
+        const r = Math.random();
+        P.sz[n] = 1.15 + r * r * 1.3;
+        P.tint[n] = Math.min(3, Math.floor(Math.pow(Math.random(), 1.4) * 4));
+        P.thr[n] = rank * 0.9 + Math.random() * 0.35;   // gauche -> droite + délai aléatoire
+        P.gain[n] = 0.55 + Math.random() * 0.75;
+        P.ph[n] = Math.random() * 6.2832;
+        P.kr[n] = 30 + Math.random() * 26;
+        n++;
+      }
+    }
+  }
+  N = n; exposure = 0; flying = false; graceUntil = performance.now() + 1800;
+}
+
+// Retire une fraction des particules en conservant l'ordre (et donc le rang gauche -> droite)
+function thin(keep) {
+  let j = 0;
+  for (let i = 0; i < N; i++) {
+    if (Math.random() < keep) {
+      if (i !== j) for (let k = 0; k < ARR.length; k++) ARR[k][j] = ARR[k][i];
+      j++;
+    }
+  }
+  N = j;
+}
+
+/* =====================================================================
+ * 3. AUDIO : détection du souffle
+ * ===================================================================== */
+const A = {
+  on: false, ctx: null, an: null, stream: null, td: null, fd: null,
+  calib: false, t0: 0, sum: 0, n: 0, noise: 0.002,
+  flat: 0, low: 0, db: 0, target: 0, breathing: false
+};
+
+async function startMic() {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no-mic');
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!A.ctx) A.ctx = new AC();
+    const rp = A.ctx.resume();            // doit partir dans le geste utilisateur (iOS)
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    try { await rp; } catch (e) {}
+    A.stream = stream;
+    const src = A.ctx.createMediaStreamSource(stream);
+    A.an = A.ctx.createAnalyser();
+    A.an.fftSize = 2048;
+    A.an.smoothingTimeConstant = 0.4;
+    A.an.minDecibels = -120; A.an.maxDecibels = -10;
+    src.connect(A.an);                    // pas de connexion à la sortie : aucun retour
+    A.td = new Float32Array(A.an.fftSize);
+    A.fd = new Float32Array(A.an.frequencyBinCount);
+    A.on = true;
+    wdx = WDX0; wdy = WDY0;
+    micBtn.classList.remove('attend', 'off'); micBtn.classList.add('on');
+    startCalibration();
+  } catch (e) {
+    A.on = false;
+    micBtn.classList.remove('attend', 'on'); micBtn.classList.add('off');   // repli : le doigt souffle
+  }
+}
+
+function stopMic() {
+  if (A.stream) A.stream.getTracks().forEach(t => t.stop());
+  A.stream = null; A.on = false; A.target = 0; A.calib = false;
+  mvBar.classList.remove('calib');
+  micBtn.classList.remove('on'); micBtn.classList.add('attend');
+}
+
+// Calibration : 1 s de bruit de fond, la barre du haut se remplit en pulsant
+function startCalibration() {
+  A.calib = true; A.t0 = performance.now(); A.sum = 0; A.n = 0;
+  mvBar.classList.add('calib');
+}
+
+function analyseAudio(now) {
+  if (!A.on) { A.target = 0; return; }
+  A.an.getFloatTimeDomainData(A.td);
+  let s = 0; const td = A.td;
+  for (let i = 0; i < td.length; i++) s += td[i] * td[i];
+  const rms = Math.sqrt(s / td.length);
+
+  // Spectre : énergie basse (< 300 Hz) sur total, et planéité spectrale (géométrique / arithmétique)
+  A.an.getFloatFrequencyData(A.fd);
+  const binHz = A.ctx.sampleRate / A.an.fftSize;
+  const b60 = Math.max(1, Math.ceil(60 / binHz)), b150 = Math.ceil(150 / binHz);
+  const b300 = Math.floor(300 / binHz), b6k = Math.min(A.fd.length - 1, Math.floor(6000 / binHz));
+  let pTot = 0, pLow = 0, sumDb = 0, sumP = 0, nb = 0;
+  for (let b = b60; b <= b6k; b++) {
+    let db = A.fd[b]; if (!(db > -140)) db = -140;
+    const p = Math.pow(10, db / 10);
+    pTot += p; if (b <= b300) pLow += p;
+    if (b >= b150) { sumDb += db; sumP += p; nb++; }
+  }
+  const flat = nb ? Math.pow(10, sumDb / nb / 10) / Math.max(sumP / nb, 1e-20) : 0;
+  const low = pLow / Math.max(pTot, 1e-20);
+  A.flat += (flat - A.flat) * 0.4; A.low += (low - A.low) * 0.4;
+
+  // Calibration du bruit de fond (on ignore les 200 premières ms, le flux démarre à vide)
+  if (A.calib) {
+    const el = now - A.t0;
+    if (el > 200) { A.sum += rms; A.n++; }
+    mvBar.style.transform = 'scaleX(' + Math.min(1, el / 1000) + ')';
+    if (el >= 1000) {
+      A.noise = Math.max(0.0003, (A.n ? A.sum / A.n : 0.001) * 1.15);
+      A.calib = false; mvBar.classList.remove('calib');
+    }
+    A.target = 0; return;
+  }
+
+  // Souffle = volume au-dessus du bruit de fond ET spectre plat (pas de pic harmonique)
+  const db = 20 * Math.log10((rms + 1e-9) / A.noise);
+  A.db = db;
+  const thr = 8 / settings.sens;
+  const flatOK = A.flat > (A.breathing ? settings.flat * 0.8 : settings.flat);   // petite hystérésis
+  let tgt = 0;
+  if (db > thr && flatOK) {
+    const vol = Math.min(1, (db - thr) / 22);
+    const lw = Math.min(1, A.low / 0.6);           // les basses renforcent l'intensité
+    tgt = vol * (0.45 + 0.55 * lw);
+    A.breathing = true;
+  } else A.breathing = false;
+  A.target = tgt;
+
+  // vu-mètre
+  mvBar.style.transform = 'scaleX(' + Math.min(1, Math.max(0, db / 36)) + ')';
+  mfBar.style.transform = 'scaleX(' + Math.min(1, A.flat / 0.6) + ')';
+}
+
+function majRepères() {
+  tickV.style.left = Math.min(100, (8 / settings.sens) / 36 * 100) + '%';
+  tickF.style.left = Math.min(100, settings.flat / 0.6 * 100) + '%';
+}
+
+/* =====================================================================
+ * 4. PHYSIQUE
+ * ===================================================================== */
+const WDX0 = 0.91, WDY0 = -0.41;     // vent par défaut : vers la droite et vers le haut
+let wdx = WDX0, wdy = WDY0;
+let inten = 0;                        // intensité lissée 0..1
+let fingerLevel = 0;                  // souffle simulé par le doigt (repli)
+let exposure = 0;                     // temps de souffle cumulé (pondéré par l'intensité)
+let flying = false;                   // des particules sont emportées
+let lastBreath = -1e9;
+let graceUntil = 0;
+const NS = 0.006, K0 = 22, C0 = 5.5, SW = 0.4, AMAX = 7000, VMAX = 1400;
+
+function step(dt, t, now) {
+  // Intensité visée : micro (si actif) sinon doigt
+  const target = A.on ? A.target : fingerLevel;
+  if (!A.on) fingerLevel *= Math.exp(-dt * 5);
+  inten += (target - inten) * (1 - Math.exp(-dt * (target > inten ? 14 : 4.5)));
+  if (target > CFG.seuilSouffle) lastBreath = now;
+
+  const active = inten > CFG.seuilSouffle;
+  if (active) exposure += dt * (0.4 + 1.6 * inten);
+
+  // Silence > 0,8 s : tout ce qui vole repart vers home
+  let startReturn = false;
+  if (flying && (now - lastBreath) / 1000 > CFG.silenceRetour) { startReturn = true; flying = false; exposure = 0; }
+
+  const { hx, hy, x, y, vx, vy, thr, gain, ph, kr, rw, st } = P;
+  const amp = 0.55 + 0.35 * Math.sin(t * 0.9);          // respiration du tremblement
+  const dragW = Math.exp(-dt * CFG.trainee);
+  const wBase = CFG.vent * inten, tBase = CFG.turbulence * inten;
+  const gz = inten < 0.1 ? CFG.gravite : CFG.gravite * 0.3;
+
+  for (let i = 0; i < N; i++) {
+    let s = st[i];
+    if (startReturn && s === 1) { s = 2; st[i] = 2; rw[i] = Math.random() * 0.45; }
+    if (active && s !== 1 && exposure >= thr[i]) {      // détachement progressif gauche -> droite
+      s = 1; st[i] = 1; flying = true;
+      vx[i] += wdx * 90 * inten * gain[i]; vy[i] += wdy * 90 * inten * gain[i];
+    }
+    const px = x[i], py = y[i];
+
+    if (s === 1) {
+      // Emporté : vent + turbulence simplex, frottement, petite gravité
+      if (px > W + 120 || px < -120 || py < -120 || py > H + 120) { vx[i] = 0; vy[i] = 0; continue; }
+      const n1 = noise2(px * NS + t * 0.5, py * NS);
+      const n2 = noise2(px * NS + 17.3, py * NS - t * 0.4 + 9.1);
+      const g = gain[i];
+      vx[i] = (vx[i] + (wdx * wBase * g + n1 * tBase) * dt) * dragW;
+      vy[i] = (vy[i] + (wdy * wBase * g + n2 * tBase + gz) * dt) * dragW;
+      x[i] = px + vx[i] * dt; y[i] = py + vy[i] * dt;
+      continue;
+    }
+
+    // Cible = home + léger tremblement
+    const tx = hx[i] + Math.sin(t * 1.3 + ph[i]) * amp;
+    const ty = hy[i] + Math.cos(t * 1.1 + ph[i] * 1.7) * amp;
+    const dx = tx - px, dy = ty - py;
+    let ax, ay;
+
+    if (s === 0) {
+      // Repos : ressort doux, le vent fait osciller avant le détachement
+      ax = K0 * dx - C0 * vx[i] + wdx * inten * 260 * gain[i];
+      ay = K0 * dy - C0 * vy[i] + wdy * inten * 260 * gain[i];
+    } else {
+      if (rw[i] > 0) {                                   // attente : dérive freinée
+        rw[i] -= dt;
+        vx[i] *= dragW; vy[i] *= dragW; x[i] = px + vx[i] * dt; y[i] = py + vy[i] * dt;
+        continue;
+      }
+      // Retour : ressort amorti avec composante tangentielle -> spirale légère
+      const k = kr[i];
+      ax = k * (dx - SW * dy); ay = k * (dy + SW * dx);
+      const m2 = ax * ax + ay * ay;
+      if (m2 > AMAX * AMAX) { const f = AMAX / Math.sqrt(m2); ax *= f; ay *= f; }
+      const c = 0.9 * Math.sqrt(k);
+      ax -= c * vx[i]; ay -= c * vy[i];
+    }
+    let nvx = vx[i] + ax * dt, nvy = vy[i] + ay * dt;
+    const v2 = nvx * nvx + nvy * nvy;
+    if (v2 > VMAX * VMAX) { const f = VMAX / Math.sqrt(v2); nvx *= f; nvy *= f; }
+    vx[i] = nvx; vy[i] = nvy;
+    x[i] = px + nvx * dt; y[i] = py + nvy * dt;
+    if (s === 2 && dx * dx + dy * dy < 0.6 && v2 < 30) st[i] = 0;   // arrivé
+  }
+}
+
+// Mini explosion locale autour d'un tap, puis reformation par le ressort de retour
+function explode(cx, cy) {
+  const R = 95, R2 = R * R, { x, y, vx, vy, st, rw } = P;
+  let hit = 0;
+  for (let i = 0; i < N; i++) { const dx = x[i] - cx, dy = y[i] - cy; if (dx * dx + dy * dy < R2) hit++; }
+  if (hit < 15) return;                                  // le tap n'est pas sur le texte
+  for (let i = 0; i < N; i++) {
+    const dx = x[i] - cx, dy = y[i] - cy, d2 = dx * dx + dy * dy;
+    if (d2 < R2) {
+      const d = Math.sqrt(d2) + 0.01, f = 1 - d / R, sp = (160 + 520 * f) * (0.6 + 0.8 * Math.random());
+      vx[i] = dx / d * sp + (Math.random() - 0.5) * 80;
+      vy[i] = dy / d * sp + (Math.random() - 0.5) * 80;
+      st[i] = 2; rw[i] = 0;
+    }
+  }
+}
+
+/* =====================================================================
+ * 5. RENDU : canvas 2D, "lighter", traînée courte, 16 pinceaux (4 teintes x 4 opacités)
+ * ===================================================================== */
+const ALPHAS = [0.28, 0.45, 0.7, 0.9];
+const STYLES = [];
+for (let t = 0; t < 4; t++) {
+  const m = t / 3;                                       // blanc chaud -> bleu glace
+  const r = Math.round(255 + (156 - 255) * m), g = Math.round(236 + (208 - 236) * m), b = Math.round(208 + (255 - 208) * m);
+  for (let a = 0; a < 4; a++) STYLES.push('rgba(' + r + ',' + g + ',' + b + ',' + ALPHAS[a] + ')');
+}
+const bid = new Uint8Array(MAXN), order = new Uint16Array(MAXN);
+const counts = new Int32Array(17);
+
+function render() {
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(0,0,0,' + CFG.alphaTrace + ')';
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'lighter';
+
+  const { hx, hy, x, y, sz, tint, st } = P;
+  const invR = 1 / (0.3 * H);
+  counts.fill(0);
+  // Opacité selon l'éloignement de home, jamais sous 0.25
+  for (let i = 0; i < N; i++) {
+    let a = 1;
+    if (st[i] !== 0) {
+      const dx = x[i] - hx[i], dy = y[i] - hy[i];
+      a = 1 - Math.sqrt(dx * dx + dy * dy) * invR;
+      if (a < 0.25) a = 0.25;
+    }
+    const lv = a >= 0.85 ? 3 : a >= 0.6 ? 2 : a >= 0.4 ? 1 : 0;
+    const b = tint[i] * 4 + lv;
+    bid[i] = b; counts[b + 1]++;
+  }
+  for (let b = 0; b < 16; b++) counts[b + 1] += counts[b];     // offsets (tri par comptage)
+  const pos = counts.slice(0, 16);
+  for (let i = 0; i < N; i++) order[pos[bid[i]]++] = i;
+  // Dessin par pinceau : un seul changement de fillStyle par groupe
+  for (let b = 0; b < 16; b++) {
+    const s0 = counts[b], s1 = counts[b + 1];
+    if (s0 === s1) continue;
+    ctx.fillStyle = STYLES[b];
+    for (let k = s0; k < s1; k++) {
+      const i = order[k], s = sz[i];
+      ctx.fillRect(x[i] - s * 0.5, y[i] - s * 0.5, s, s);
+    }
+  }
+}
+
+/* =====================================================================
+ * 6. INPUTS : doigt, tap, triple tap, appui long, champ, micro, panneau
+ * ===================================================================== */
+let ptr = null, lpTimer = 0, tapTimes = [];
+
+cv.addEventListener('pointerdown', e => {
+  if (ptr) return;
+  if (A.ctx && A.ctx.state !== 'running') A.ctx.resume().catch(() => {});
+  ptr = { id: e.pointerId, sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, lt: e.timeStamp, t0: e.timeStamp, moved: false, lp: false };
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+  // Appui long : nouvelle calibration du bruit de fond
+  lpTimer = setTimeout(() => {
+    if (ptr && !ptr.moved) {
+      ptr.lp = true;
+      if (A.on) startCalibration();
+      if (navigator.vibrate) navigator.vibrate(25);
+    }
+  }, 650);
+});
+
+cv.addEventListener('pointermove', e => {
+  if (!ptr || e.pointerId !== ptr.id) return;
+  if (Math.hypot(e.clientX - ptr.sx, e.clientY - ptr.sy) > 10) { ptr.moved = true; clearTimeout(lpTimer); }
+  const dtm = e.timeStamp - ptr.lt;
+  if (dtm > 0) {
+    const dx = e.clientX - ptr.lx, dy = e.clientY - ptr.ly, L = Math.hypot(dx, dy);
+    if (!A.on && L > 0.5) {
+      // Repli sans micro : la vitesse du doigt = intensité, son sens = direction du vent
+      fingerLevel = Math.max(fingerLevel, Math.min(1, (L / dtm * 1000) / 1400));
+      wdx += (dx / L - wdx) * 0.35; wdy += (dy / L - wdy) * 0.35;
+      const n = Math.hypot(wdx, wdy) || 1; wdx /= n; wdy /= n;
+    }
+    ptr.lx = e.clientX; ptr.ly = e.clientY; ptr.lt = e.timeStamp;
+  }
+});
+
+function finPointeur(e, annule) {
+  if (!ptr || e.pointerId !== ptr.id) return;
+  clearTimeout(lpTimer);
+  const p = ptr; ptr = null;
+  if (annule || p.moved || p.lp || e.timeStamp - p.t0 > 400) return;
+  surTap(e.clientX, e.clientY);
+}
+cv.addEventListener('pointerup', e => finPointeur(e, false));
+cv.addEventListener('pointercancel', e => finPointeur(e, true));
+
+function surTap(cx, cy) {
+  explode(cx, cy);
+  // Triple tap : panneau de réglages
+  const now = performance.now();
+  tapTimes.push(now); if (tapTimes.length > 3) tapTimes.shift();
+  if (tapTimes.length === 3 && now - tapTimes[0] < 700) { panel.classList.toggle('show'); tapTimes = []; }
+}
+
+// Validation du texte
+let ignoreResizeUntil = 0;
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const t = inp.value.trim().slice(0, 20);
+  if (t) build(t, true);
+  inp.blur();
+});
+inp.addEventListener('blur', () => { ignoreResizeUntil = performance.now() + 800; });
+
+// Micro : geste utilisateur obligatoire sur iOS
+micBtn.addEventListener('click', () => { A.on ? stopMic() : startMic(); });
+
+// Réglages
+function sauverReglages() {
+  settings.sens = +sSens.value; settings.flat = +sFlat.value;
+  try { localStorage.setItem('souffle-reglages', JSON.stringify(settings)); } catch (e) {}
+  majRepères();
+}
+sSens.addEventListener('input', sauverReglages);
+sFlat.addEventListener('input', sauverReglages);
+
+// Resize / rotation : on recalcule les particules (sauf clavier ouvert sans changement de largeur)
+let rsTimer = 0;
+function surResize() {
+  clearTimeout(rsTimer);
+  rsTimer = setTimeout(() => {
+    const w = Math.round(window.innerWidth), h = Math.round(window.innerHeight);
+    if (w === W && h === H) return;
+    if (w === W && (document.activeElement === inp || performance.now() < ignoreResizeUntil)) return;
+    setup(); build(curText, true);
+  }, 180);
+}
+window.addEventListener('resize', surResize);
+window.addEventListener('orientationchange', surResize);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && A.ctx && A.ctx.state !== 'running') A.ctx.resume().catch(() => {});
+});
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+/* =====================================================================
+ * 7. PERF : boucle principale et auto-adaptation
+ * ===================================================================== */
+let last = performance.now(), tt = 0, emaDt = 1 / 60, lowTime = 0;
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const raw = (now - last) / 1000; last = now;
+  if (raw <= 0) return;
+  const dt = Math.min(raw, 1 / 30);
+  tt += dt;
+
+  analyseAudio(now);
+  if (!A.on) mvBar.style.transform = 'scaleX(' + Math.min(1, fingerLevel) + ')';
+  step(dt, tt, now);
+  render();
+
+  // Sous 45 FPS pendant 2 s : -20 % de particules (jamais sous le plancher)
+  if (raw < 0.1 && now > graceUntil) {
+    emaDt += (raw - emaDt) * 0.1;
+    if (1 / emaDt < 45) lowTime += raw; else lowTime = 0;
+    if (lowTime >= 2 && N > CFG.min) { thin(0.8); lowTime = 0; emaDt = 1 / 50; }
+  }
+}
+
+setup();
+majRepères();
+build(inp.value.trim() || 'SOUFFLE', true);
+requestAnimationFrame(t => { last = t; frame(t); });
+
+})();
+</script>
+</body>
+</html>
