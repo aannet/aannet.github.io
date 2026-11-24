@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Le monde réel</title>
+<style>
+  :root { --paper:#f4f1ea; --ink:#1d1d1b; --muted:#6b675e; --accent:#c8442b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; background:#000; overflow:hidden; overscroll-behavior:none; }
+  body { -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
+
+  /* La page vit dans un scroller fixe : ses rects sont relatifs au viewport,
+     et la transform de caméra s'applique depuis le coin haut-gauche de l'écran. */
+  #page {
+    position:fixed; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    background:var(--paper); color:var(--ink);
+    font:17px/1.55 Georgia, "Times New Roman", serif;
+    transform-origin:0 0; will-change:transform, filter, opacity;
+  }
+  .wrap { max-width:680px; margin:0 auto; padding:28px 22px 120px; }
+  .kicker { font:600 12px/1 system-ui, sans-serif; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); }
+  h1 { font-size:44px; line-height:1.05; margin:14px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:19px; color:var(--muted); margin-bottom:22px; }
+  .hero { height:190px; border-radius:6px; margin:6px 0 26px;
+          background:linear-gradient(135deg,#1d1d1b 0%,#3a3a35 55%,#c8442b 100%);
+          display:flex; align-items:flex-end; padding:16px; color:#f4f1ea;
+          font:600 13px/1.3 system-ui, sans-serif; letter-spacing:.06em; }
+  p { margin-bottom:16px; }
+  h2 { font:700 22px/1.2 system-ui, sans-serif; margin:30px 0 12px; }
+  blockquote { border-left:4px solid var(--accent); padding:4px 0 4px 16px; margin:22px 0;
+               font-size:22px; font-style:italic; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0 26px; }
+  .card { background:#e6e1d6; border-radius:6px; padding:14px; font:14px/1.4 system-ui, sans-serif; }
+  .card b { display:block; font-size:28px; margin-bottom:4px; }
+  .pill { display:inline-block; background:var(--ink); color:var(--paper); border-radius:99px;
+          padding:10px 18px; font:600 14px/1 system-ui, sans-serif; margin-top:6px; }
+  footer { margin-top:40px; font:13px/1.4 system-ui, sans-serif; color:var(--muted); }
+
+  #matrix { position:fixed; inset:0; width:100%; height:100%; opacity:0; pointer-events:none;
+            touch-action:none; background:transparent; }
+  #matrix.armed { pointer-events:auto; }
+
+  /* ---------- Scènes cachées : les pages sur lesquelles on retombe ---------- */
+  #scenes { position:fixed; inset:0; pointer-events:none; z-index:5; overflow:hidden; }
+  .scene { position:absolute; left:0; top:0; width:100vw; height:100vh; overflow:hidden;
+           visibility:hidden; transform-origin:0 0; will-change:transform, opacity, filter; }
+
+  .scene.term { background:#030703; color:#39ff6a; font:15px/1.6 ui-monospace, Menlo, Consolas, monospace;
+                padding:34px 22px; }
+  .term .dim { color:#1d8f3c; }
+  .term .warn { color:#d7ffe0; font-weight:700; }
+  .term .bar { display:block; margin:14px 0; height:16px; width:72%; background:#0f3d1a; border:1px solid #39ff6a; }
+  .term .bar i { display:block; height:100%; width:61%; background:#39ff6a; }
+  .term .big { font-size:30px; line-height:1.2; margin:18px 0; font-weight:700; }
+
+  .scene.mail { background:#ffffff; color:#1a1a1a; font:15px/1.4 system-ui, sans-serif; }
+  .mail header { background:#1f3a5f; color:#fff; padding:22px 20px 16px; font-weight:700; font-size:22px; }
+  .mail header small { display:block; font-weight:400; font-size:13px; opacity:.75; margin-top:4px; }
+  .mail .row { padding:14px 20px; border-bottom:1px solid #e3e3e3; }
+  .mail .row b { display:block; font-size:16px; }
+  .mail .row span { color:#666; }
+  .mail .row.unread { background:#eef4ff; }
+  .mail .row em { float:right; font-style:normal; color:#999; font-size:13px; }
+
+  .scene.e404 { background:#0d1b8c; color:#fff; font:17px/1.5 system-ui, sans-serif; padding:60px 26px;
+                display:flex; flex-direction:column; justify-content:center; }
+  .e404 .code { font:800 120px/1 system-ui, sans-serif; letter-spacing:-.04em; }
+  .e404 h3 { font-size:26px; margin:8px 0 14px; }
+  .e404 .btn { display:inline-block; align-self:flex-start; margin-top:22px; background:#fff; color:#0d1b8c;
+               padding:12px 20px; border-radius:6px; font-weight:700; }
+
+  .scene.paper { background:var(--paper); color:var(--ink); font:17px/1.55 Georgia, "Times New Roman", serif; }
+
+  #hud { position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+         font:600 11px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing:.16em; text-transform:uppercase;
+         padding:9px 14px; border-radius:99px; background:rgba(20,20,18,.82); color:#f4f1ea;
+         pointer-events:none; white-space:nowrap; transition:background .3s, color .3s; z-index:10; }
+  #hud.armed { background:rgba(0,30,8,.9); color:#3dff6e; box-shadow:0 0 18px rgba(0,255,65,.35); }
+  #hud.deep { background:transparent; color:#3dff6e; text-shadow:0 0 8px #00ff41; }
+  #hud.land { background:rgba(0,0,0,.75); color:#3dff6e; box-shadow:0 0 18px rgba(0,255,65,.35); }
+</style>
+</head>
+<body>
+
+<div id="page">
+  <div class="wrap">
+    <div class="kicker">Édition spéciale · 20 novembre</div>
+    <h1>Bienvenue dans le monde réel</h1>
+    <p class="lede">Tout ce que vous lisez ici est vrai. Enfin, tout ce que vous lisez ici est rendu de façon convaincante.</p>
+
+    <div class="hero">FIG. 1 — UNE IMAGE PARFAITEMENT ORDINAIRE</div>
+
+    <p>Le matin commence comme d'habitude. Le café coule, le métro arrive à l'heure, la ligne 3 est fluide. Personne ne remarque que le pigeon sur le quai a traversé deux fois le même rebord, exactement de la même manière.</p>
+    <p>Les ingénieurs appellent ça un cache. Les autres appellent ça une impression de déjà-vu. Les deux ont raison, et ça ne change rien au prix du croissant.</p>
+
+    <blockquote>« Il n'y a pas de cuillère. Il y a un rendu de cuillère, mis en cache à 60 Hz. »</blockquote>
+
+    <h2>Les chiffres du jour</h2>
+    <div class="grid">
+      <div class="card"><b>60</b>images par seconde, sans exception</div>
+      <div class="card"><b>0</b>bug signalé depuis le dernier patch</div>
+      <div class="card"><b>1</b>lapin blanc aperçu près de la gare</div>
+      <div class="card"><b>∞</b>niveaux de profondeur, apparemment</div>
+    </div>
+
+    <h2>Ce qu'il faut retenir</h2>
+    <p>Si un texte vous paraît soudain trouble, ce n'est pas votre vue. Si les lettres commencent à tomber, ne paniquez pas. Pincez l'écran, avancez, et regardez de plus près ce dont tout ceci est fait.</p>
+    <p>Pour revenir, un double tap suffit. Normalement.</p>
+    <span class="pill">Prendre la pilule rouge</span>
+
+    <footer>Tap pour armer, puis pinch pour entrer. Double tap pour remonter.</footer>
+  </div>
+</div>
+
+<canvas id="matrix"></canvas>
+
+<div id="scenes">
+  <div class="scene term">
+    <div class="dim">// session 0x7f3a — couche inconnue</div>
+    <div>&gt; connexion établie</div>
+    <div>&gt; utilisateur : <span class="warn">non identifié</span></div>
+    <div>&gt; lecture de /realite/index.html</div>
+    <span class="bar"><i></i></span>
+    <div class="dim">  61 % · 3 412 objets rendus</div>
+    <div class="big">ACCÈS<br>PARTIEL</div>
+    <div>&gt; cuillère.obj ........ <span class="warn">absent</span></div>
+    <div>&gt; gravité.cfg ......... ok</div>
+    <div>&gt; souvenirs.db ........ chiffré</div>
+    <div>&gt; sortie ............. <span class="warn">introuvable</span></div>
+    <div class="dim">&gt; continuez à descendre_</div>
+  </div>
+
+  <div class="scene mail">
+    <header>Boîte de réception<small>4 non lus · synchronisé il y a 0 s</small></header>
+    <div class="row unread"><em>00:00</em><b>Expéditeur inconnu</b><span>Vous avez déjà lu ce message.</span></div>
+    <div class="row unread"><em>00:00</em><b>Service client Réalité</b><span>Votre abonnement expire bientôt</span></div>
+    <div class="row unread"><em>hier</em><b>Lapin Blanc</b><span>Suivez-moi. Pas de questions.</span></div>
+    <div class="row"><em>hier</em><b>Vous-même</b><span>Ne descends pas plus bas.</span></div>
+    <div class="row unread"><em>lun.</em><b>Opérateur</b><span>Signal perdu à la couche 12</span></div>
+    <div class="row"><em>lun.</em><b>Newsletter</b><span>10 signes que votre monde est simulé</span></div>
+    <div class="row"><em>dim.</em><b>Pigeon</b><span>Re: Re: Re: le rebord</span></div>
+  </div>
+
+  <div class="scene e404">
+    <div class="code">404</div>
+    <h3>Cette réalité est introuvable</h3>
+    <div>La page que vous cherchez a été déplacée, supprimée, ou n'a jamais existé. Vérifiez l'adresse, ou continuez à descendre.</div>
+    <span class="btn">Retour au monde réel</span>
+  </div>
+
+  <div class="scene paper" id="scene-clone"></div>
+</div>
+
+<div id="hud">Tap pour armer</div>
+
+<script>
+(() => {
+  // ---------- Réglages ----------
+  const BASE = 8;          // taille d'une cellule de page à l'échelle 1 (px CSS)
+  const K = 4;             // facteur d'échelle entre deux couches de pluie
+  const UP = 64;           // seuil de renormalisation
+  const MIN_CELL = 5;      // en dessous, une couche n'est pas dessinée
+  const BIG = 42;          // au-dessus, rendu fillText (net) au lieu de l'atlas
+  const LAND_EVERY = 3;    // une page toutes les N couches
+  const GRAV = 46;         // gravité des lettres qui tombent (cellules / s²)
+  const LIFE = 2.4;        // durée de vie d'une lettre qui tombe (s)
+  const GL = [...'ｦｱｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ012345789Z:・."=*+-<>¦|'];
+  const NG = GL.length;
+  const LEVELS = 9;        // 0..7 vert, 8 = tête blanche
+  const FONT = '"MS Gothic","Hiragino Kaku Gothic ProN","Noto Sans Mono CJK JP","Noto Sans CJK JP",ui-monospace,monospace';
+  const LFONT = 'ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace';
+
+  const page = document.getElementById('page');
+  const cv = document.getElementById('matrix');
+  const hud = document.getElementById('hud');
+  const ctx = cv.getContext('2d');
+  document.getElementById('scene-clone').innerHTML = page.innerHTML;
+  const sceneEls = [...document.querySelectorAll('.scene')];
+
+  let W = innerWidth, H = innerHeight, DPR = Math.min(devicePixelRatio || 1, 2);
+
+  // Caméra : écran = monde * S + T ; offset = nombre de couches déjà traversées
+  let S = 1, Tx = 0, Ty = 0, offset = 0;
+  let armed = false, exiting = false, lastT = 0;
+
+  // Instances de "pages" posées dans la pluie : clé = numéro absolu de couche
+  // { mask, ac, ar (ancrage en cellules), fallStart, el (scène DOM ou null) }
+  const instances = new Map();
+  let pageMask = null, sceneMasks = [];
+
+  // Doigt dans la matrice
+  let touchAmt = 0, fingerX = 0, fingerY = 0;
+  let freezeAmt = 0, tFreeze = 0, frzX = 0, frzY = 0, frzR = 120, lastActive = 0;
+
+  const levelColor = i => i === 8 ? '#e9ffec'
+    : `rgb(${Math.round(10 * i / 7)},${Math.round(45 + 210 * Math.pow(i / 7, 1.1))},${Math.round(18 + 47 * i / 7)})`;
+  const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+  // ---------- Atlas ----------
+  const CP = 40;
+  function buildAtlas(chars, font, mirror) {
+    const cvs = document.createElement('canvas');
+    cvs.width = Math.max(1, chars.length) * CP; cvs.height = LEVELS * CP;
+    const a = cvs.getContext('2d');
+    a.font = `${Math.round(CP * 0.82)}px ${font}`;
+    a.textAlign = 'center'; a.textBaseline = 'middle';
+    for (let l = 0; l < LEVELS; l++) {
+      a.fillStyle = levelColor(l);
+      a.shadowColor = l >= 6 ? '#00ff41' : 'transparent';
+      a.shadowBlur = l === 8 ? 10 : l >= 6 ? 4 : 0;
+      chars.forEach((ch, g) => {
+        a.save();
+        a.translate(g * CP + CP / 2, l * CP + CP / 2);
+        if (mirror) a.scale(-1, 1);
+        a.fillText(ch, 0, 1);
+        a.restore();
+      });
+    }
+    return cvs;
+  }
+  const atlas = buildAtlas(GL, FONT, true);           // katakana en miroir, comme dans le film
+  const LCH = [];  const lIndex = new Map();          // vraies lettres des pages
+  let letterAtlas = null, letterAtlasN = -1;
+  const charId = ch => { let i = lIndex.get(ch); if (i === undefined) { i = LCH.length; LCH.push(ch); lIndex.set(ch, i); } return i; };
+
+  // ---------- Hash déterministe ----------
+  function h3(a, b, c) {
+    let x = (a | 0) * 374761393 + (b | 0) * 668265263 + (c | 0) * 2147483647;
+    x = (x ^ (x >>> 13)) * 1274126177;
+    x = x ^ (x >>> 16);
+    return (x >>> 0) / 4294967296;
+  }
+
+  // ---------- Capture de la forme d'une page ----------
+  function parseRGB(s) { const m = s.match(/[\d.]+/g) || [0, 0, 0, 1]; return m.map(Number); }
+  function alphaOf(s) { const m = parseRGB(s); return m.length > 3 ? m[3] : 1; }
+  function luminance(s) { const [r, g, b] = parseRGB(s); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
+
+  function captureMask(root) {
+    const rr = root.getBoundingClientRect();
+    const ox = rr.left, oy = rr.top;
+    const bgLum = luminance(getComputedStyle(root).backgroundColor);
+    const cols = Math.ceil(W / BASE), rows = Math.ceil(H / BASE);
+
+    const m = document.createElement('canvas');
+    m.width = W; m.height = H;
+    const c = m.getContext('2d');
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+
+    // blocs avec un fond distinct (hero, cartes, boutons, bandeaux)
+    root.querySelectorAll('*').forEach(el => {
+      const cs = getComputedStyle(el);
+      const img = cs.backgroundImage !== 'none';
+      const bg = cs.backgroundColor;
+      if (!img && (alphaOf(bg) < 0.05 || Math.abs(luminance(bg) - bgLum) < 0.04)) return;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < oy || r.top > oy + H) return;
+      c.fillStyle = 'rgb(0,0,255)';
+      c.fillRect(r.left - ox, r.top - oy, r.width, r.height);
+    });
+
+    // texte : mots dessinés dans le canal rouge, lettres une par une dans une grille
+    const letter = new Int32Array(cols * rows).fill(-1);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    c.textBaseline = 'middle';
+    c.globalCompositeOperation = 'lighter';
+    let node;
+    while ((node = walker.nextNode())) {
+      const cs = getComputedStyle(node.parentElement);
+      c.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const k = Math.min(1, Math.max(0.3, Math.abs(luminance(cs.color) - bgLum) * 1.3));
+      c.fillStyle = `rgba(255,0,0,${k.toFixed(2)})`;
+      const re = /\S+/g; let mt;
+      while ((mt = re.exec(node.data))) {
+        range.setStart(node, mt.index);
+        range.setEnd(node, mt.index + mt[0].length);
+        const rects = range.getClientRects();
+        if (!rects.length) continue;
+        const r = rects[0];
+        if (r.bottom < oy || r.top > oy + H) continue;
+        if (rects.length === 1) c.fillText(mt[0], r.left - ox, r.top - oy + r.height / 2);
+        else for (const q of rects) c.fillRect(q.left - ox, q.top - oy + q.height * 0.3, q.width, q.height * 0.4);
+        // lettres individuelles
+        for (let i = 0; i < mt[0].length; i++) {
+          range.setStart(node, mt.index + i);
+          range.setEnd(node, mt.index + i + 1);
+          const lr = range.getBoundingClientRect();
+          if (!lr.width) continue;
+          const col = Math.floor((lr.left + lr.width / 2 - ox) / BASE);
+          const row = Math.floor((lr.top + lr.height / 2 - oy) / BASE);
+          if (col < 0 || row < 0 || col >= cols || row >= rows) continue;
+          const idx = row * cols + col;
+          if (letter[idx] < 0) letter[idx] = charId(mt[0][i]);
+        }
+      }
+    }
+    c.globalCompositeOperation = 'source-over';
+
+    const data = c.getImageData(0, 0, W, H).data;
+    const ink = new Float32Array(cols * rows);
+    const delay = new Float32Array(cols * rows);
+    const letters = [];
+    for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
+      // R = texte, B = blocs. Valeur > 0 : texte ; -1 : bloc ; 0 : vide
+      let s = 0, bl = 0, n = 0;
+      for (let y = r * BASE; y < Math.min(H, r * BASE + BASE); y += 2)
+        for (let x = q * BASE; x < Math.min(W, q * BASE + BASE); x += 2) {
+          const i = (y * W + x) * 4; s += data[i]; bl += data[i + 2]; n++;
+        }
+      const idx = r * cols + q;
+      const txt = Math.min(1, Math.sqrt(s / n / 255) * 1.7);
+      ink[idx] = txt > 0.08 ? txt : (bl / n > 128 ? -1 : 0);
+      if (letter[idx] >= 0 && ink[idx] <= 0) letter[idx] = -1;
+      // chaque colonne lâche à son moment, avec un peu de désordre
+      delay[idx] = 0.05 + h3(q, 0, 78) * 1.3 + h3(q, r, 77) * 0.35;
+      if (letter[idx] >= 0) letters.push(q, r, letter[idx]);
+    }
+    return { cols, rows, ink, letter, delay, letters: Int32Array.from(letters) };
+  }
+
+  function captureAll() {
+    instances.clear();
+    pageMask = captureMask(page);
+    sceneEls.forEach(el => { el.style.transform = 'none'; el.style.opacity = ''; el.style.filter = ''; });
+    sceneMasks = sceneEls.map(captureMask);
+    sceneEls.forEach(el => { el.style.visibility = 'hidden'; });
+    instances.set(0, { mask: pageMask, ac: 0, ar: 0, fallStart: null, el: null });
+    if (LCH.length !== letterAtlasN) { letterAtlas = buildAtlas(LCH, LFONT, false); letterAtlasN = LCH.length; }
+  }
+
+  // ---------- Caméra ----------
+  const depth = () => Math.log2(S) + offset * Math.log2(K);
+  const cellOf = la => BASE * S / Math.pow(K, la - offset);
+
+  function zoomAt(px, py, r) {
+    S *= r;
+    Tx = px - (px - Tx) * r;
+    Ty = py - (py - Ty) * r;
+    if (offset === 0 && S < 1) { S = 1; Tx = 0; Ty = 0; }
+    while (S > UP) { S /= K; offset++; }                         // on a traversé une couche
+    while (offset > 0 && S < UP / K / 1.5) { S *= K; offset--; } // on remonte d'une couche
+  }
+  function pan(dx, dy) { if (offset === 0 && S <= 1.0001) return; Tx += dx; Ty += dy; }
+
+  // Atterrissage : relâché près d'une page, la caméra s'y aligne
+  function landing() {
+    if (offset === 0 && depth() < 0.35 && S > 1.0001) {
+      zoomAt(W / 2, H / 2, Math.pow(1 / S, 0.15));
+      Tx *= 0.85; Ty *= 0.85;
+      if (S < 1.002) { S = 1; Tx = 0; Ty = 0; }
+      return;
+    }
+    for (const [la, inst] of instances) {
+      if (la <= 0 || la < offset) continue;
+      const sc = cellOf(la);
+      if (sc > 6 && sc < 10.5) {
+        zoomAt(W / 2, H / 2, Math.pow(BASE / sc, 0.12));
+        const sc2 = cellOf(la);
+        Tx += (-inst.ac * sc2 - Tx) * 0.12;
+        Ty += (-inst.ar * sc2 - Ty) * 0.12;
+        return;
+      }
+    }
+  }
+
+  // ---------- Rendu ----------
+  function resize() {
+    W = innerWidth; H = innerHeight; DPR = Math.min(devicePixelRatio || 1, 2);
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    if (armed && depth() < 0.02) captureAll();
+  }
+
+  function rainBrightness(col, row, la, t) {
+    const speed = 4 + h3(col, la, 11) * 10;          // cellules / seconde
+    const P = 26 + Math.floor(h3(col, la, 12) * 34); // période de la colonne
+    const trail = 6 + h3(col, la, 13) * 18;
+    const phase = Math.floor((t * speed + h3(col, la, 14) * P) % P);
+    const rr = ((row % P) + P) % P;
+    const d = (phase - rr + P) % P;
+    if (d === 0) return 1;
+    if (d < trail) return (1 - d / trail) * 0.85;
+    return h3(col, row, la * 31 + 7) < 0.22 ? 0.06 : 0;
+  }
+
+  // déplacement par le doigt (résultat dans DX, DY)
+  let DX = 0, DY = 0;
+  const REP_R = 125;
+  function repel(cx, cy) {
+    DX = 0; DY = 0;
+    if (touchAmt < 0.002) return;
+    const dx = cx - fingerX, dy = cy - fingerY, d2 = dx * dx + dy * dy;
+    if (d2 >= REP_R * REP_R || d2 < 0.01) return;
+    const d = Math.sqrt(d2), f = 1 - d / REP_R, push = f * f * 78 * touchAmt;
+    DX = dx / d * push; DY = dy / d * push;
+  }
+  function freezeOf(cx, cy) {
+    if (freezeAmt < 0.002) return 0;
+    const d = Math.hypot(cx - frzX, cy - frzY);
+    return freezeAmt * (1 - smooth(frzR * 0.65, frzR, d));
+  }
+
+  function glyph(isLetter, g, lvl, x, y, sc, big) {
+    if (big) {
+      ctx.fillStyle = levelColor(lvl);
+      ctx.shadowBlur = lvl >= 6 ? sc * 0.25 : 0;
+      ctx.save(); ctx.translate(x + sc / 2, y + sc / 2);
+      if (!isLetter) ctx.scale(-1, 1);
+      ctx.fillText(isLetter ? LCH[g] : GL[g], 0, 0);
+      ctx.restore();
+    } else if (isLetter) {
+      ctx.drawImage(letterAtlas, g * CP, lvl * CP, CP, CP, x, y, sc, sc);
+    } else {
+      ctx.drawImage(atlas, g * CP, lvl * CP, CP, CP, x, y, sc, sc);
+    }
+  }
+
+  function drawLayer(li, t, z) {
+    const la = li + offset;
+    const sc = BASE * S / Math.pow(K, li);      // taille écran d'une cellule
+    const wc = BASE / Math.pow(K, li);          // taille monde d'une cellule
+    const alpha = smooth(MIN_CELL, 13, sc) * (1 - smooth(150, 480, sc));
+    if (alpha <= 0.01) return;
+
+    const c0 = Math.floor((-Tx / S) / wc), c1 = Math.ceil(((W - Tx) / S) / wc);
+    const r0 = Math.floor((-Ty / S) / wc), r1 = Math.ceil(((H - Ty) / S) / wc);
+    const big = sc > BIG;
+
+    const inst = instances.get(la);
+    const m = inst ? inst.mask : null;
+    const mix = m ? (la === 0 ? 1 : smooth(4.9, 7, sc)) * (1 - smooth(14, 64, sc)) : 0;
+    const el = inst && inst.fallStart !== null ? t - inst.fallStart : -1;
+    const glitch = la === 0 && z < 0.9;
+
+    ctx.globalAlpha = alpha * (big ? 0.85 : 1);
+    if (big) {
+      ctx.font = `${Math.round(sc * 0.86)}px ${FONT}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#00ff41';
+    }
+
+    for (let col = c0; col < c1; col++) {
+      const x0 = col * sc + Tx;
+      const rate = 0.4 + h3(col, la, 21) * 1.6;
+      for (let row = r0; row < r1; row++) {
+        const y0 = row * sc + Ty;
+        const cx = x0 + sc / 2, cy = y0 + sc / 2;
+        const fz = freezeOf(cx, cy);
+        const tc = fz > 0 ? t - fz * (t - tFreeze) : t;
+
+        let b = rainBrightness(col, row, la, tc);
+        let letter = -1;
+        if (mix > 0.001) {
+          const mc = col - inst.ac, mr = row - inst.ar;
+          let pb = 0.035;
+          if (mc >= 0 && mr >= 0 && mc < m.cols && mr < m.rows) {
+            const idx = mr * m.cols + mc, v = m.ink[idx];
+            if (v !== 0 && !(el >= 0 && el > m.delay[idx])) {
+              if (v > 0) {
+                pb = 0.38 + 0.6 * v + (h3(col, row, Math.floor(t * 9)) < 0.04 ? 0.3 : 0);
+                if (m.letter[idx] >= 0 && mix > 0.45) letter = m.letter[idx];
+              } else pb = 0.13;
+            }
+          }
+          if (glitch && h3(col, row, Math.floor(t * 14)) < 0.012) { pb = 1; letter = -1; }
+          b = b * (1 - mix) + pb * mix;
+        }
+        b += fz * 0.18;
+        if (b < 0.03) continue;
+        const lvl = b >= 0.97 ? 8 : Math.min(7, Math.floor(b * 8));
+        const g = letter >= 0 ? letter
+          : Math.floor(h3(col, row, la * 7 + Math.floor(tc * rate + h3(row, col, 5) * 10)) * NG);
+        repel(cx, cy);
+        glyph(letter >= 0, g, lvl, x0 + DX, y0 + DY, sc, big);
+      }
+    }
+
+    // lettres qui se détachent et tombent dans leur colonne
+    if (m && el >= 0) {
+      const L = m.letters;
+      for (let i = 0; i < L.length; i += 3) {
+        const mc = L[i], mr = L[i + 1];
+        const e = el - m.delay[mr * m.cols + mc];
+        if (e < 0 || e > LIFE) continue;
+        const col = mc + inst.ac;
+        const x0 = col * sc + Tx;
+        if (x0 < -sc || x0 > W) continue;
+        const y0 = (mr + inst.ar + 0.5 * GRAV * e * e) * sc + Ty;
+        if (y0 < -sc || y0 > H) continue;
+        const fade = 1 - e / LIFE;
+        const b = e < 0.12 ? 1 : 0.95 * fade;
+        if (b < 0.03) continue;
+        const lvl = b >= 0.97 ? 8 : Math.min(7, Math.floor(b * 8));
+        const keep = e < 0.35 || h3(i, Math.floor(e * 12), 3) < 0.25;   // la lettre se change peu à peu en code
+        const g = keep ? L[i + 2] : Math.floor(h3(i, Math.floor(e * 15), 9) * NG);
+        repel(x0 + sc / 2, y0 + sc / 2);
+        glyph(keep, g, lvl, x0 + DX, y0 + DY, sc, big);
+      }
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  let lastUI = '';
+  function frame(ms) {
+    requestAnimationFrame(frame);
+    if (!armed) return;
+    const t = ms / 1000;
+    const dt = Math.min(0.05, Math.max(0, t - lastT)); lastT = t;
+
+    if (exiting) {
+      zoomAt(W / 2, H / 2, 1 / 1.18);
+      if (offset === 0) { Tx *= 0.82; Ty *= 0.82; }
+      if (offset === 0 && S <= 1.0001) { S = 1; Tx = 0; Ty = 0; exiting = false; setTimeout(disarm, 350); }
+    } else if (pts.size === 0) landing();
+
+    // doigt posé : la pluie s'écarte ; deux doigts immobiles : le temps s'arrête
+    const z0 = depth();
+    const wantFreeze = pts.size === 2 && performance.now() - lastActive > 350 && z0 > 0.7;
+    if (wantFreeze && freezeAmt < 0.02) tFreeze = t;
+    freezeAmt += ((wantFreeze ? 1 : 0) - freezeAmt) * Math.min(1, dt * (wantFreeze ? 6 : 2.2));
+    const wantTouch = pts.size === 1 && z0 > 0.5;
+    touchAmt += ((wantTouch ? 1 : 0) - touchAmt) * Math.min(1, dt * (wantTouch ? 9 : 4));
+
+    const z = depth();
+    const matrixAmt = smooth(0.04, 0.7, z);
+
+    // la vraie page suit la caméra puis se brouille
+    const ui = offset === 0
+      ? `translate(${Tx.toFixed(1)}px,${Ty.toFixed(1)}px) scale(${S.toFixed(4)})|${(z * 7).toFixed(2)}|${(1 - smooth(0.25, 0.95, z)).toFixed(3)}`
+      : 'hidden';
+    if (ui !== lastUI) {
+      lastUI = ui;
+      if (offset === 0) {
+        const [tr, blur, op] = ui.split('|');
+        page.style.visibility = 'visible';
+        page.style.transform = tr;
+        page.style.filter = `blur(${blur}px)`;
+        page.style.opacity = op;
+      } else page.style.visibility = 'hidden';
+    }
+    cv.style.opacity = matrixAmt.toFixed(3);
+
+    // instances : création des pages d'atterrissage, chute, nettoyage
+    for (let li = 0; BASE * S / Math.pow(K, li) >= MIN_CELL; li++) {
+      const la = li + offset;
+      if (la > 0 && la % LAND_EVERY === 0 && !instances.has(la)) {
+        const n = (la / LAND_EVERY - 1) % sceneMasks.length;
+        const mask = sceneMasks[n], wc = BASE / Math.pow(K, li);
+        instances.set(la, {
+          mask, el: sceneEls[n], fallStart: null,
+          ac: Math.floor(((W / 2 - Tx) / S) / wc) - Math.floor(mask.cols / 2),
+          ar: Math.floor(((H / 2 - Ty) / S) / wc) - Math.floor(mask.rows / 2),
+        });
+      }
+    }
+    let landed = null;
+    const shown = new Map();
+    for (const [la, inst] of instances) {
+      if (la !== 0 && (la < offset - 2 || la > offset + 8)) { instances.delete(la); continue; }
+      if (la < offset) continue;
+      const sc = cellOf(la);
+      if (inst.fallStart === null && sc > 11) inst.fallStart = t;
+      else if (inst.fallStart !== null && sc < 9) inst.fallStart = null;
+      if (inst.el) {
+        const op = smooth(6.3, 7.6, sc) * (1 - smooth(8.6, 12, sc));
+        if (op > 0.01) shown.set(inst.el, { inst, sc, op });
+        if (op > 0.6) landed = la;
+      }
+    }
+    sceneEls.forEach(el => {
+      const s = shown.get(el);
+      if (s) {
+        el.style.visibility = 'visible';
+        el.style.transform = `translate(${(s.inst.ac * s.sc + Tx).toFixed(1)}px,${(s.inst.ar * s.sc + Ty).toFixed(1)}px) scale(${(s.sc / BASE).toFixed(4)})`;
+        el.style.opacity = s.op.toFixed(3);
+        el.style.filter = `blur(${(Math.abs(s.sc - BASE) * 0.7).toFixed(2)}px)`;
+      } else if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden';
+    });
+
+    if (landed !== null) {
+      hud.className = 'land';
+      hud.textContent = `Couche ${landed} · pincez pour continuer`;
+    } else {
+      hud.className = z > 0.7 ? 'deep' : 'armed';
+      hud.textContent = z > 0.7
+        ? `Profondeur ${(z / Math.log2(K)).toFixed(1)} · double tap pour remonter`
+        : '● Armé · pincez pour entrer';
+    }
+
+    if (matrixAmt < 0.01) return;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    for (let li = 0; BASE * S / Math.pow(K, li) >= MIN_CELL; li++) drawLayer(li, t, z);
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- Armer / désarmer ----------
+  function arm() {
+    if (armed) return;
+    armed = true;
+    S = 1; Tx = 0; Ty = 0; offset = 0;
+    captureAll();
+    cv.classList.add('armed');
+    hud.className = 'armed'; hud.textContent = '● Armé · pincez pour entrer';
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+  function disarm() {
+    armed = false; exiting = false;
+    S = 1; Tx = 0; Ty = 0; offset = 0;
+    instances.clear();
+    touchAmt = 0; freezeAmt = 0;
+    cv.classList.remove('armed'); cv.style.opacity = 0;
+    page.style.transform = ''; page.style.filter = ''; page.style.opacity = ''; page.style.visibility = '';
+    sceneEls.forEach(el => { el.style.visibility = 'hidden'; });
+    lastUI = '';
+    hud.className = ''; hud.textContent = 'Tap pour armer';
+  }
+
+  // tap sur la page (non armée) : on arme, sauf si c'était un scroll
+  let pd = null;
+  page.addEventListener('pointerdown', e => { pd = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  page.addEventListener('pointerup', e => {
+    if (!pd) return;
+    const moved = Math.hypot(e.clientX - pd.x, e.clientY - pd.y);
+    if (moved < 10 && performance.now() - pd.t < 350) arm();
+    pd = null;
+  });
+  page.addEventListener('pointercancel', () => { pd = null; });
+
+  // ---------- Gestes sur le canvas (armé) ----------
+  const pts = new Map();
+  let prevDist = 0, prevMx = 0, prevMy = 0;
+  let tap = null, lastTap = 0, singleTimer = 0;
+
+  function pair() {
+    const [a, b] = [...pts.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  }
+
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    exiting = false;
+    if (pts.size === 1) {
+      tap = { x: e.clientX, y: e.clientY, t: performance.now(), ok: true };
+      fingerX = e.clientX; fingerY = e.clientY;
+    } else if (pts.size === 2) {
+      const p = pair(); prevDist = p.d; prevMx = p.mx; prevMy = p.my;
+      lastActive = performance.now();
+      if (tap) tap.ok = false;
+    }
+  });
+
+  cv.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size >= 2) {
+      const p = pair();
+      if (prevDist > 0) {
+        if (Math.abs(p.d - prevDist) > 1.2 || Math.hypot(p.mx - prevMx, p.my - prevMy) > 1.2) lastActive = performance.now();
+        zoomAt(p.mx, p.my, p.d / prevDist);
+        pan(p.mx - prevMx, p.my - prevMy);
+      }
+      prevDist = p.d; prevMx = p.mx; prevMy = p.my;
+      frzX = p.mx; frzY = p.my; frzR = Math.max(110, p.d / 2 + 70);
+    } else {
+      fingerX = e.clientX; fingerY = e.clientY;
+      if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 10) tap.ok = false;
+    }
+  });
+
+  function up(e) {
+    pts.delete(e.pointerId);
+    if (pts.size === 1) { const [a] = [...pts.values()]; fingerX = a.x; fingerY = a.y; prevDist = 0; }
+    if (pts.size === 0) {
+      prevDist = 0;
+      if (tap && tap.ok && performance.now() - tap.t < 300) onTap();
+      tap = null;
+    }
+  }
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+
+  function onTap() {
+    const now = performance.now();
+    if (now - lastTap < 320) {           // double tap
+      clearTimeout(singleTimer); lastTap = 0;
+      if (depth() > 0.05) exiting = true; else disarm();
+      return;
+    }
+    lastTap = now;
+    clearTimeout(singleTimer);
+    singleTimer = setTimeout(() => { if (armed && depth() < 0.05) disarm(); }, 330);
+  }
+
+  // desktop : pinch trackpad (ctrl+wheel) ou molette ; clic maintenu = doigt
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0025));
+    exiting = false;
+    zoomAt(e.clientX, e.clientY, r);
+  }, { passive: false });
+
+  // bloquer le zoom natif (iOS ignore user-scalable=no)
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
+    document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
+  addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
