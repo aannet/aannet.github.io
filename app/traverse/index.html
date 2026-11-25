@@ -51,6 +51,27 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 #dBtns button{width:44px;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.4);background:rgba(0,0,0,.45);color:#fff;font:600 13px inherit;font-family:inherit}
 #dEnd{position:absolute;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 68px);padding:16px;border-radius:12px;border:1px solid rgba(255,226,140,.5);background:rgba(5,10,16,.88);text-align:center;display:none}
 #dEnd.on{display:block}
+#dFact{position:absolute;left:16px;right:16px;top:calc(env(safe-area-inset-top) + 210px);padding:12px 14px;border-radius:12px;border:1px solid rgba(255,226,140,.45);background:rgba(5,10,16,.82);pointer-events:none;opacity:0;transform:translateY(-6px);transition:opacity .35s,transform .35s}
+#dFact.on{opacity:1;transform:none}
+#fT{font-size:14px;color:#ffe28c;margin-bottom:4px}
+#fX{font-size:12px;line-height:1.55;color:#dcebf2}
+#carnet{position:fixed;inset:0;z-index:15;overflow-y:auto;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);background:rgba(5,7,10,.96);display:none}
+#carnet.on{display:block}
+.ckh{display:flex;justify-content:space-between;align-items:center;font-size:20px;color:#fff}
+.ckh button{width:44px;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:none;color:#fff;font:16px inherit;font-family:inherit}
+#ckN{font-size:12px;color:#5ff3ff;margin:6px 0 12px}
+#ckS{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ck{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);font-size:11px;color:#6f8f9b;line-height:1.4}
+.ck i{display:block;width:100%;height:34px;border-radius:6px;margin-bottom:6px;background:repeating-linear-gradient(45deg,#11161c 0 6px,#161d25 6px 12px)}
+.ck b{display:block;font-size:13px;color:#8aa3ad}
+.ck.on{border-color:rgba(95,243,255,.35);color:#9fc6d4}
+.ck.on b{color:#fff}
+#ckR{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}
+#ckR div{padding:10px;border-radius:10px;background:rgba(95,243,255,.06);font-size:11px;color:#9fc6d4}
+#ckR b{display:block;font-size:16px;color:#fff;margin-top:2px}
+.ckl{font-size:11px;color:#5ff3ff;margin-bottom:4px}
+#ckC{font-size:13px;color:#e8f6ff;line-height:1.6}
+#carnet small{display:block;margin-top:16px;font-size:10px;color:#5d7c88}
 #dEnd button+button{margin-left:8px}
 #wx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .wl{position:absolute;left:0;top:0;font-size:11px;color:#fff;text-shadow:0 0 6px #000,0 0 2px #000;pointer-events:none;white-space:nowrap;display:none}
@@ -78,6 +99,16 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
   <button id="bMode">HRZ</button>
   <button id="bCal">NORD</button>
   <button id="bCore">CŒUR</button>
+  <button id="bBook">CARNET</button>
+</div>
+<div id="carnet">
+  <div class="ckh"><b>Carnet de bord</b><button id="ckX">✕</button></div>
+  <div id="ckN"></div>
+  <div id="ckS"></div>
+  <div id="ckR"></div>
+  <div class="ckl">Villes atteintes</div>
+  <div id="ckC"></div>
+  <small>Plaques tectoniques : PB2002 (Peter Bird, 2003), licence ODC-By. Épaisseurs de croûte estimées.</small>
 </div>
 <div id="card">
   <div class="n" id="cN"></div>
@@ -106,6 +137,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
     <div id="dRow"><span><b id="dL1">température</b><i id="dV1"></i></span><span><b id="dL2">vitesse</b><i id="dV2"></i></span><span><b id="dL3">temps</b><i id="dV3"></i></span></div>
   </div>
   <div id="dToast"></div>
+  <div id="dFact"><div id="fT"></div><div id="fX"></div></div>
   <div id="dFrame"><span>COUPE · ATLAS</span></div>
   <div id="dLeg"></div>
   <div id="dBtns"><button id="dClose">✕</button><button id="dPause">❚❚</button><button id="dSpd">1×</button></div>
@@ -810,6 +842,7 @@ void main() {
 }`;
 const FRAG = `
 uniform float uT; uniform vec3 uCam; uniform float uCut; uniform float uF; uniform vec3 uA; uniform vec3 uDir;
+uniform float uL; uniform vec3 uCrA; uniform vec3 uCrB; uniform float uCold; uniform float uHot;
 varying vec3 vW;
 #include <clipping_planes_pars_fragment>
 vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
@@ -841,17 +874,28 @@ void main() {
   float km = (1.0 - length(vW)/100.0) * 6371.0;
   vec3 p = vW * uF;
   vec3 col; float heat;
-  if (km < 35.0) {                       // croûte : roches stratifiées brun-gris
+  // croûte locale (x = épaisseur km, y = eau km, z = océanique) : départ pour la 1re moitié du tunnel, arrivée pour la 2e
+  vec3 cr = uCut > 0.5 ? vec3(35.0, 0.0, 0.0) : mix(uCrA, uCrB, step(0.5, dot(vW - uA, uDir)/max(uL, 0.001)));
+  float crust = cr.x + cr.y;
+  if (km < cr.y) {                       // eau de mer : bleu profond, reflets
+    float n = fbm(p*1.2 + vec3(0.0, uT*0.3, 0.0));
+    col = mix(vec3(0.01,0.06,0.14), vec3(0.04,0.22,0.38), n*0.5 + 0.5);
+    heat = 0.02;
+  } else if (km < crust && cr.z > 0.5) { // croûte océanique : basalte sombre en coussins
+    float n = 1.0 - abs(snoise(p*2.0));
+    col = mix(vec3(0.10,0.10,0.11), vec3(0.26,0.24,0.22), pow(n, 3.0));
+    heat = 0.05 + 0.1*(km - cr.y)/cr.x;
+  } else if (km < crust) {               // croûte continentale : roches stratifiées brun-gris
     float n = fbm(p*2.5);
     float strata = sin(km*1.6 + n*3.0)*0.5 + 0.5;
     col = mix(vec3(0.40,0.29,0.20), vec3(0.66,0.52,0.36), strata);
     col = mix(col, vec3(0.42,0.41,0.39), smoothstep(0.15,0.6,fbm(p*6.0+7.0))*0.7);
-    heat = 0.05 + 0.1*km/35.0;
+    heat = 0.05 + 0.1*km/crust;
   } else if (km < 660.0) {               // manteau supérieur : péridotite orange, grains d'olivine
     float n = fbm(p*1.6 + vec3(0.0, uT*0.02, 0.0));
     col = mix(vec3(0.80,0.36,0.12), vec3(0.97,0.60,0.22), n*0.5+0.5);
     col = mix(col, vec3(0.42,0.52,0.22), smoothstep(0.55,0.85,snoise(p*9.0))*0.45);
-    heat = 0.2 + 0.15*(km-35.0)/625.0;
+    heat = 0.2 + 0.15*(km-crust)/(660.0-crust);
   } else if (km < 2890.0) {              // manteau inférieur : rouge-orangé, convection lente
     float n = fbm(p*0.9 + vec3(uT*0.015, 0.0, 0.0) + snoise(p*0.12)*2.0);
     col = mix(vec3(0.55,0.11,0.06), vec3(0.88,0.30,0.12), n*0.5+0.5);
@@ -868,7 +912,12 @@ void main() {
     heat = 1.0;
   }
   if (uCut > 0.5) { gl_FragColor = vec4(col*(0.82 + 0.25*heat), 1.0); return; }
-  float b = min(min(abs(km-35.0), abs(km-660.0)), min(abs(km-2890.0), abs(km-5150.0)));
+  float man = step(crust, km)*step(km, 2890.0);
+  col = mix(col, vec3(0.30,0.40,0.55)*(0.7 + 0.3*fbm(p*3.0)), uCold*man*0.75);     // plaque plongeante, plus froide
+  float pl = smoothstep(0.1, 0.7, fbm(p*0.8 + vec3(0.0, 0.0, -uT*0.6)));
+  col = mix(col, vec3(1.0,0.78,0.38), uHot*man*(0.35 + 0.5*pl)); heat += uHot*man*0.6; // panache de point chaud
+  float b = min(min(abs(km-crust), abs(km-660.0)), min(abs(km-2890.0), abs(km-5150.0)));
+  if (cr.y > 0.0) b = min(b, abs(km - cr.y));
   col *= 0.7 + 0.5*(snoise(vW*16.0)*0.5 + 0.5);          // grain de la roche
   float f = abs(fract(dot(vW - uA, uDir)/1.5) - 0.5);       // anneaux de cuvelage du tunnel
   col *= 1.0 - 0.5*smoothstep(0.44, 0.5, f);
@@ -878,6 +927,146 @@ void main() {
   gl_FragColor = vec4(o, 1.0);
 }`;
 
+
+// ---------- Géologie réelle du trajet : croûte, frontières de plaques (PB2002, Peter Bird), points chauds
+const PLATE = { AF: "Afrique", AM: "Amour", AN: "Antarctique", AP: "Altiplano", AR: "Arabie", AS: "Égée", AT: "Anatolie", AU: "Australie", BH: "Tête d'Oiseau", BR: "Balmoral", BS: "mer de Banda", BU: "Birmanie", CA: "Caraïbes", CL: "Carolines", CO: "Cocos", CR: "Conway", EA: "île de Pâques", EU: "Eurasie", FT: "Futuna", GP: "Galápagos", IN: "Inde", JF: "Juan de Fuca", JZ: "Juan Fernández", KE: "Kermadec", MA: "Mariannes", MN: "Manus", MO: "Moluques", MS: "mer des Moluques", NA: "Amérique du Nord", NB: "Bismarck Nord", ND: "Andes du Nord", NH: "Nouvelles-Hébrides", NI: "Niuafo'ou", NZ: "Nazca", OK: "Okhotsk", ON: "Okinawa", PA: "Pacifique", PM: "Panama", PS: "Philippines", RI: "Rivera", SA: "Amérique du Sud", SB: "Bismarck Sud", SC: "Scotia", SL: "Shetland", SO: "Somalie", SS: "Salomon", SU: "Sonde", SW: "Sandwich", TI: "Timor", TO: "Tonga", WL: "Woodlark", YA: "Yangtsé" };
+const BCLASS = { OSR: ["dorsale océanique", "les deux plaques s'écartent et du nouveau plancher océanique se forme"], OTF: ["faille transformante océanique", "les plaques coulissent l'une contre l'autre"],
+  SUB: ["zone de subduction", "une plaque plonge sous l'autre dans le manteau"], CRB: ["rift continental", "un continent est en train de se déchirer"],
+  CTF: ["faille transformante continentale", "les plaques coulissent, source de grands séismes"], CCB: ["collision continentale", "deux continents se percutent et soulèvent des montagnes"],
+  OCB: ["collision océan-continent", "les plaques se rapprochent et se chevauchent"] };
+const HOTSPOTS = [["Hawaï", 19.4, -155.3], ["Islande", 64.4, -17.3], ["Yellowstone", 44.4, -110.7], ["La Réunion", -21.2, 55.7], ["Galápagos", -0.4, -91.5], ["Açores", 38.5, -28.0],
+  ["Canaries", 28.3, -16.6], ["Afar", 11.5, 41.8], ["Samoa", -14.3, -169.1], ["Kerguelen", -49.3, 69.5], ["Tristan da Cunha", -37.1, -12.3], ["île de Pâques", -27.1, -109.4],
+  ["Tahiti", -17.9, -148.1], ["Cap-Vert", 15.0, -24.0], ["Eifel", 50.2, 6.8]];
+let GEOL = null;
+const loadGeo = () => GEOL ? Promise.resolve(GEOL) : fetch("geology.json").then(r => r.json()).then(j => {
+  const dec = q => q.split(" ").map(t => t.split(",").map(Number));
+  GEOL = { seg: j.seg.map(x => ({ b: x.b, c: x.c, v: x.v, pts: dec(x.p) })), oro: j.oro.map(o => ({ n: o.n, pts: dec(o.p) })) };
+  return GEOL;
+}).catch(() => null);
+function pip(pts, x, y) {          // pts = [[x, y], ...]
+  let ins = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi)*(y - yi)/(yj - yi) + xi) ins = !ins;
+  }
+  return ins;
+}
+function onLand(la, lo) {
+  let ins = false;
+  for (const l of LAND) for (let i = 0, j = l.length - 1; i < l.length; j = i++) {
+    const [yi, xi] = l[i], [yj, xj] = l[j];
+    if ((yi > la) !== (yj > la) && lo < (xj - xi)*(la - yi)/(yj - yi) + xi) ins = !ins;
+  }
+  return ins;
+}
+// épaisseur de croûte estimée : océan 4 km d'eau + 7 km de basalte, continent 35 km, chaînes de montagnes 50 km, Tibet 70 km
+function crustAt(la, lo) {
+  if (!onLand(la, lo)) return { km: 7, water: 4, oc: true, label: "fond océanique" };
+  let km = 35, label = "croûte continentale";
+  if (GEOL) for (const o of GEOL.oro) if (pip(o.pts, lo, la)) { km = 50; label = "chaîne de montagnes"; break; }
+  if (la > 27 && la < 40 && lo > 75 && lo < 100) { km = 70; label = "plateau du Tibet"; }
+  return { km, water: 0, oc: false, label };
+}
+function distSeg(la, lo, pts) {     // distance approchée (km) d'un point à une polyligne [lon, lat]
+  const k = Math.cos(la*D); let best = 1e9;
+  for (let i = 1; i < pts.length; i++) {
+    const ax = ((pts[i-1][0] - lo + 540) % 360 - 180)*k, ay = pts[i-1][1] - la;
+    const bx = ((pts[i][0] - lo + 540) % 360 - 180)*k, by = pts[i][1] - la;
+    if (Math.abs(bx - ax) > 90*k) continue;                     // segment coupé par le méridien opposé
+    const dx = bx - ax, dy = by - ay, L2 = dx*dx + dy*dy || 1e-9;
+    const t = Math.max(0, Math.min(1, -(ax*dx + ay*dy)/L2));
+    best = Math.min(best, Math.hypot(ax + dx*t, ay + dy*t));
+  }
+  return best*111.2;
+}
+const plateName = b => b.split(/[-\/\\]/).map(cd => PLATE[cd] || cd).join(" / ");
+function analyzeRoute(c) {
+  const A = me.p0, Bv = c.p, R = { a: crustAt(me.lat, me.lon), b: crustAt(c.lat, c.lon), events: [] };
+  const seen = new Set();
+  for (let i = 1; i < 200; i++) {
+    const s2 = i/200, q = [A[0] + (Bv[0] - A[0])*s2, A[1] + (Bv[1] - A[1])*s2, A[2] + (Bv[2] - A[2])*s2];
+    const r = Math.hypot(q[0], q[1], q[2]), depth = RT*(1 - r), la = Math.asin(q[2]/r)/D, lo = Math.atan2(q[1], q[0])/D;
+    if (GEOL && depth < 700) for (const sg of GEOL.seg) {
+      const key = sg.b + sg.c;
+      if (seen.has(key)) continue;
+      const dk = distSeg(la, lo, sg.pts);
+      // une plaque plongeante descend en biais (~45°) : à la profondeur d, elle se trouve à environ d km de la fosse
+      const hit = sg.c === "SUB" ? depth > 40 && Math.abs(dk - depth) < 80 : dk < 90 && depth < 300;
+      if (!hit) continue;
+      seen.add(key); R.events.push({ s: s2, kind: sg.c === "SUB" ? "sub" : "bound", seg: sg, depth });
+    }
+    if (depth < 2890) for (const h of HOTSPOTS) {
+      if (seen.has(h[0])) continue;
+      const dd = Math.acos(Math.max(-1, Math.min(1, la*0 + Math.sin(la*D)*Math.sin(h[1]*D) + Math.cos(la*D)*Math.cos(h[1]*D)*Math.cos((lo - h[2])*D))))*RT;
+      if (dd < 350) { seen.add(h[0]); R.events.push({ s: s2, kind: "plume", hs: h[0], depth }); }
+    }
+  }
+  R.events.sort((x, y) => x.s - y.s);
+  return R;
+}
+function routeSummary(c, R) {
+  const desc = r => r.oc ? "fond océanique (4 km d'eau, puis 7 km de basalte)" : r.label + " (" + r.km + " km de croûte)";
+  const ev = R.events.map(e => e.kind === "plume" ? "point chaud " + (e.hs.startsWith("île") ? "de l'" : "de ") + e.hs : BCLASS[e.seg.c][0] + " " + plateName(e.seg.b));
+  return "Départ : " + desc(R.a) + ". Arrivée : " + desc(R.b) + ". " +
+    (ev.length ? "Sous la route : " + [...new Set(ev)].slice(0, 3).join(", ") + ". " : "") +
+    "Profondeur maximale : " + fmt(RT*(1 - Math.cos(c.ang/2))) + " km.";
+}
+
+// ---------- Points d'étape : faits réels déclenchés à la profondeur atteinte (à la descente)
+const FACTS = [
+  [4, "La mine la plus profonde", "La mine d'or de Mponeng, en Afrique du Sud, descend à environ 4 km. La roche y dépasse 60 °C."],
+  [12.3, "Le forage de Kola", "Le trou le plus profond jamais creusé : 12 262 m, en Russie, en 1989. Tu viens de le dépasser."],
+  ["moho", "La limite de Mohorovičić", "En 1909, Andrija Mohorovičić remarque que les ondes sismiques accélèrent brusquement ici : c'est la base de la croûte."],
+  [100, "Sous les plaques", "Vers 100 km s'arrête la lithosphère. Les plaques tectoniques, rigides, glissent sur le manteau plus mou qui est en dessous."],
+  [150, "L'usine à diamants", "Les diamants naissent entre 150 et 200 km, sous environ 50 000 atmosphères, puis remontent par des éruptions très rapides."],
+  [410, "L'olivine change de forme", "À 410 km, l'olivine se réorganise en un cristal plus dense, la wadsleyite. Même composition, structure différente."],
+  [520, "De l'eau dans la roche", "La ringwoodite piège de l'eau dans ses cristaux. En 2014, un diamant brésilien en a ramené un fragment hydraté de cette zone."],
+  [660, "Le minéral le plus abondant", "Sous 660 km domine la bridgmanite, le minéral le plus répandu de la planète. On ne l'a trouvée à l'état naturel que dans une météorite."],
+  [2700, "La couche D″", "Juste au-dessus du noyau, une zone mal connue où s'accumulent peut-être des restes de plaques plongées il y a des centaines de millions d'années."],
+  [2890, "Le champ magnétique naît ici", "Le fer liquide du noyau externe brasse en permanence. Ces mouvements créent le champ magnétique qui nous protège du vent solaire."],
+  [5150, "La découverte d'Inge Lehmann", "En 1936, la sismologue danoise Inge Lehmann déduit l'existence de ce noyau solide en étudiant des ondes sismiques inexpliquées."],
+  [6300, "Le centre de la Terre", "Environ 3,6 millions d'atmosphères et plus de 5 000 °C. Ton poids est nul : la Terre t'attire de tous les côtés à la fois."]
+];
+
+// ---------- Carnet : échantillons, records, villes atteintes (mémorisés dans ce navigateur)
+const SAMPLES = [
+  ["eau", "Eau de mer", "#2a6fb0", "Traverser un fond océanique"], ["basalte", "Basalte", "#3d3d42", "Croûte océanique"],
+  ["granite", "Granite", "#b99a80", "Croûte continentale"], ["peridotite", "Péridotite", "#6f8f3a", "Manteau supérieur, riche en olivine"],
+  ["ringwoodite", "Ringwoodite", "#3b6fc9", "Zone de transition, 520 à 660 km"], ["bridgmanite", "Bridgmanite", "#b9542a", "Manteau inférieur"],
+  ["plaque", "Plaque plongeante", "#5c7590", "Passer sous une zone de subduction"], ["panache", "Roche de panache", "#ff8a3c", "Passer sous un point chaud"],
+  ["ferliq", "Fer liquide", "#f2a12b", "Noyau externe"], ["ferni", "Fer-nickel", "#fde68a", "Noyau interne"]
+];
+const CK = "traverse.carnet";
+const carnet = () => { try { return JSON.parse(localStorage.getItem(CK)) || {}; } catch (_) { return {}; } };
+const saveCarnet = k => { try { localStorage.setItem(CK, JSON.stringify(k)); } catch (_) {} };
+function collect(id) {
+  const k = carnet(); k.s = k.s || {};
+  if (k.s[id]) return;
+  k.s[id] = Date.now(); saveCarnet(k);
+  const sm = SAMPLES.find(x => x[0] === id);
+  toast("Nouvel échantillon : " + sm[1] + " (" + Object.keys(k.s).length + "/" + SAMPLES.length + ")");
+}
+function logTrip(c, kind) {
+  const k = carnet(); k.cities = k.cities || []; k.dives = k.dives || 0; k.flights = k.flights || 0;
+  if (!k.cities.includes(c.n)) k.cities.push(c.n);
+  if (kind === "tunnel") {
+    k.dives++;
+    k.maxDepth = Math.max(k.maxDepth || 0, Math.round(RT*(1 - Math.cos(c.ang/2))));
+    k.longest = Math.max(k.longest || 0, Math.round(c.chord));
+  } else k.flights++;
+  saveCarnet(k);
+}
+function renderCarnet() {
+  const k = carnet(), got = k.s || {};
+  $("ckS").innerHTML = SAMPLES.map(([id, n, col, how]) => got[id]
+    ? `<div class="ck on"><i style="background:${col}"></i><b>${n}</b><span>${how}</span></div>`
+    : `<div class="ck"><i></i><b>???</b><span>${how}</span></div>`).join("");
+  $("ckN").textContent = Object.keys(got).length + " / " + SAMPLES.length + " échantillons";
+  $("ckR").innerHTML = [["Plongées", k.dives || 0], ["Vols", k.flights || 0], ["Plus profond", fmt(k.maxDepth || 0) + " km"], ["Plus long tunnel", fmt(k.longest || 0) + " km"]]
+    .map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join("");
+  const cs = k.cities || [];
+  $("ckC").textContent = cs.length ? cs.join(" · ") : "Aucune ville atteinte pour l'instant.";
+}
 let T3 = null, G = null, dive = null, dLast = 0, toastT = 0;
 const loadThree = async () => T3 || (T3 = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"));
 function earthTexture() {
@@ -891,6 +1080,13 @@ function earthTexture() {
   g.strokeStyle = "rgba(255,255,255,.14)"; g.lineWidth = 1;
   for (let lo = 0; lo <= 360; lo += 30) { g.beginPath(); g.moveTo(lo/360*2048, 0); g.lineTo(lo/360*2048, 1024); g.stroke(); }
   for (let la = 30; la < 180; la += 30) { g.beginPath(); g.moveTo(0, la/180*1024); g.lineTo(2048, la/180*1024); g.stroke(); }
+  if (GEOL) {                          // frontières de plaques : rouge = subduction, jaune = dorsale, blanc = autres
+    g.lineWidth = 2.5;
+    for (const sg of GEOL.seg) {
+      g.strokeStyle = sg.c === "SUB" ? "#ff4040" : sg.c === "OSR" ? "#ffd84a" : "rgba(255,255,255,.7)";
+      g.beginPath(); sg.pts.forEach(([lo, la], j) => { const X = (lo + 180)/360*2048, Y = (90 - la)/180*1024; j ? g.lineTo(X, Y) : g.moveTo(X, Y); }); g.stroke();
+    }
+  }
   return c;
 }
 function glowTexture() {
@@ -910,7 +1106,7 @@ function initGL() {
   const camOut = new T.PerspectiveCamera(28, 1, 1, 3000); camOut.layers.set(2);
   const plane = new T.Plane(new T.Vector3(0, 0, 1), 0);
   const mk = cut => new T.ShaderMaterial({
-    uniforms: { uT: { value: 0 }, uCam: { value: new T.Vector3() }, uA: { value: new T.Vector3() }, uDir: { value: new T.Vector3(0, 1, 0) }, uCut: { value: cut ? 1 : 0 }, uF: { value: cut ? 0.08 : 1 } },
+    uniforms: { uT: { value: 0 }, uCam: { value: new T.Vector3() }, uA: { value: new T.Vector3() }, uDir: { value: new T.Vector3(0, 1, 0) }, uL: { value: 1 }, uCrA: { value: new T.Vector3(35, 0, 0) }, uCrB: { value: new T.Vector3(35, 0, 0) }, uCold: { value: 0 }, uHot: { value: 0 }, uCut: { value: cut ? 1 : 0 }, uF: { value: cut ? 0.08 : 1 } },
     vertexShader: VERT, fragmentShader: FRAG, side: T.BackSide, clipping: cut, clippingPlanes: cut ? [plane] : null
   });
   const matTube = mk(false), matCut = mk(true);
@@ -936,7 +1132,9 @@ function setupDive(c) {
   tube.position.copy(A).add(Bp).multiplyScalar(0.5);
   tube.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir);
   tube.layers.set(1); G.scene.add(tube); G.tube = tube;
-  G.matTube.uniforms.uA.value.copy(A); G.matTube.uniforms.uDir.value.copy(dir);
+  G.matTube.uniforms.uA.value.copy(A); G.matTube.uniforms.uDir.value.copy(dir); G.matTube.uniforms.uL.value = L;
+  const ra = dive.route.a, rb = dive.route.b;
+  G.matTube.uniforms.uCrA.value.set(ra.km, ra.water, ra.oc ? 1 : 0); G.matTube.uniforms.uCrB.value.set(rb.km, rb.water, rb.oc ? 1 : 0);
   // poussière dans le tunnel, teintée par la couche traversée : donne la sensation de vitesse
   let e1 = new T.Vector3().crossVectors(dir, A.clone().normalize()); if (e1.lengthSq() < 1e-6) e1.set(1, 0, 0).cross(dir); e1.normalize();
   const e2 = new T.Vector3().crossVectors(dir, e1);
@@ -966,30 +1164,36 @@ function setupDive(c) {
 function toast(t) { $("dToast").textContent = t; $("dToast").classList.add("on"); toastT = performance.now() + 2800; }
 async function startDive(c) {
   if (!c) return;
-  dive = { c, u: 0, speed: 1, paused: false, done: false, ready: false, yaw: 0, pitch: 0, layer: -1, phase: "tunnel" };
+  dive = { c, u: 0, speed: 1, paused: false, done: false, ready: false, yaw: 0, pitch: 0, layer: -2, phase: "tunnel" };
   dive.wxP = fetchWeather(c).then(w => { if (dive && dive.c === c) dive.wx = w; return w; });
   $("dL1").textContent = "température"; $("dL2").textContent = "vitesse"; $("dL3").textContent = "temps";
   $("dLeg").style.display = ""; $("dFrame").style.display = ""; $("dDepth").style.fontSize = "";
   $("wlA").style.display = $("wlB").style.display = "none";
   dLast = performance.now();
-  $("dTo").textContent = "VERS " + c.n.toUpperCase() + " · " + c.c.toUpperCase();
+  $("dTo").textContent = (c.n === "Antipodes" ? "VERS LES ANTIPODES" : "VERS " + c.n.toUpperCase()) + " · " + c.c.toUpperCase();
   $("dDepth").textContent = ""; $("dLayer").textContent = "Chargement du moteur 3D…"; $("dLayer").style.color = "#9fc6d4";
   $("dLeg").innerHTML = GEO.map(l => `<div><i style="background:${l[2]}"></i>${l[0]}</div>`).join("");
   $("dEnd").classList.remove("on"); $("dPause").textContent = "❚❚"; $("dSpd").textContent = "1×";
   $("dive").classList.add("on");
-  try { await loadThree(); } catch (_) { $("dLayer").textContent = "Impossible de charger Three.js (réseau)"; return; }
+  try { await Promise.all([loadThree(), loadGeo()]); } catch (_) { $("dLayer").textContent = "Impossible de charger Three.js (réseau)"; return; }
   if (!dive) return;
   if (!G) initGL();
+  dive.route = analyzeRoute(c); dive.factI = 0; dive.factQ = []; dive.factEnd = 0; dive.evI = 0;
+  logTrip(c, "tunnel");
   setupDive(c);
+  showFact("PROFIL DU TRAJET", routeSummary(c, dive.route), 6500);
   loadWorld().catch(() => {});
   toast("Glisse pour regarder les parois");
 }
-function endDive() { clearPatches(); dive = null; $("dive").classList.remove("on"); lastFocus = undefined; precip(false); $("dToast").classList.remove("on"); }
+function showFact(t, x, ms) { $("fT").textContent = t; $("fX").textContent = x; $("dFact").classList.add("on"); if (dive) dive.factEnd = performance.now() + (ms || 5500); }
+function endDive() { $("dFact").classList.remove("on"); clearPatches(); dive = null; $("dive").classList.remove("on"); lastFocus = undefined; precip(false); $("dToast").classList.remove("on"); }
 function diveFrame() {
   const now = performance.now(), dt = Math.min(0.05, (now - dLast)/1000); dLast = now;
   if (!dive.ready) return;
   if (dive.phase !== "tunnel") { worldFrame(now, dt); return; }
-  if (!dive.paused && dive.u < 1) dive.u = Math.min(1, dive.u + dt/DIVE_S*dive.speed);
+  const factOn = dive.factEnd > now;
+  if (!factOn && dive.factEnd) { $("dFact").classList.remove("on"); dive.factEnd = 0; }
+  if (!dive.paused && dive.u < 1) dive.u = Math.min(1, dive.u + dt/DIVE_S*dive.speed*(factOn ? 0.3 : 1));   // ralenti pendant la lecture
   const c = dive.c, u = dive.u, half = c.chord/2;
   const x = half*Math.cos(Math.PI*u);
   const depth = Math.max(0, RT - Math.hypot(RT*Math.cos(c.ang/2), x));
@@ -1017,17 +1221,57 @@ function diveFrame() {
   r.setViewport(0, 0, w, h); r.setScissor(0, 0, w, h); r.setClearColor(0x000000); r.render(G.scene, camFP);
   r.setViewport(rc.left, h - rc.bottom, S, S); r.setScissor(rc.left, h - rc.bottom, S, S); r.setClearColor(0x05070a); r.render(G.scene, camOut);
 
-  // HUD
-  const li = layerIdx(depth), lay = GEO[li];
-  if (li !== dive.layer) {
-    if (dive.layer >= 0) toast(BOUND[Math.min(li, dive.layer)] + " → " + lay[0].toLowerCase());
-    dive.layer = li;
+  // couches réelles sous le point courant
+  const RT2 = dive.route, crN = s01 < 0.5 ? RT2.a : RT2.b, crust = crN.km + crN.water;
+  const inWater = depth < crN.water, li = depth < crust ? 0 : layerIdx(Math.max(depth, 36)), lay = GEO[li];
+  const layName = inWater ? "Océan" : li === 0 ? (crN.oc ? "Croûte océanique" : "Croûte continentale") : lay[0];
+  const layCol = inWater ? "#5aa0e6" : li === 0 && crN.oc ? "#9aa0a8" : lay[2];
+  const lkey = inWater ? -1 : li;
+  if (lkey !== dive.layer) {
+    if (dive.started) {
+      const prev = dive.layer, lo2 = Math.min(Math.max(prev, 0), Math.max(lkey, 0));
+      const what = prev === -1 || lkey === -1 ? "Plancher océanique" : lo2 === 0 ? "Discontinuité de Mohorovičić · " + crust + " km" : BOUND[lo2];
+      toast(what + " → " + layName.toLowerCase());
+    }
+    dive.layer = lkey; dive.started = true;
     [...$("dLeg").children].forEach((d, i) => d.classList.toggle("on", i === li));
   }
+  // échantillons
+  if (inWater) collect("eau"); else if (li === 0) collect(crN.oc ? "basalte" : "granite");
+  else if (depth < 410) collect("peridotite"); else if (depth >= 520 && depth < 660) collect("ringwoodite");
+  else if (depth >= 660 && depth < 2890) collect("bridgmanite"); else if (depth >= 2890 && depth < 5150) collect("ferliq"); else if (depth >= 5150) collect("ferni");
+  // faits, à la descente uniquement
+  if (u < 0.5 && dive.started) while (dive.factI < FACTS.length) {
+    const [fd, ft, fx] = FACTS[dive.factI], need = fd === "moho" ? crust + 1 : fd;
+    if (depth < need) break;
+    dive.factI++;
+    dive.factQ.push([ft, fx]);
+  }
+  if (!factOn && dive.factQ.length) { const [ft, fx] = dive.factQ.shift(); showFact(ft, fx); }
+  // événements géologiques sous la route : frontières de plaques, plaques plongeantes, panaches
+  let cold = 0, hot = 0;
+  for (const e of RT2.events) {
+    const wgt = 1 - Math.min(1, Math.abs(s01 - e.s)/0.05);
+    if (e.kind === "sub" && depth > crust && depth < 700) cold = Math.max(cold, wgt);
+    if (e.kind === "plume" && depth > crust) hot = Math.max(hot, wgt);
+  }
+  while (dive.evI < RT2.events.length && s01 >= RT2.events[dive.evI].s) {
+    const e = RT2.events[dive.evI++];
+    if (e.kind === "plume") { collect("panache"); dive.factQ.push(["Panache du point chaud " + (e.hs.startsWith("île") ? "de l'" : "de ") + e.hs, "Une colonne de roche plus chaude remonte lentement du manteau profond et alimente les volcans en surface."]); }
+    else {
+      const [cn, cx] = BCLASS[e.seg.c];
+      if (e.kind === "sub" && e.depth < 700) collect("plaque");
+      dive.factQ.push(e.kind === "sub" && e.depth > 40
+        ? ["Dans une plaque plongeante", "Tu traverses la plaque qui s'enfonce sous la frontière " + plateName(e.seg.b) + ". Plus froide que le manteau autour, elle descend d'environ " + e.seg.v + " mm par an."]
+        : ["Sous la frontière " + plateName(e.seg.b), "Ici passe une " + cn + " : " + cx + ". Vitesse relative : environ " + e.seg.v + " mm par an."]);
+    }
+  }
+  G.matTube.uniforms.uCold.value += (cold - G.matTube.uniforms.uCold.value)*Math.min(1, dt*3);
+  G.matTube.uniforms.uHot.value += (hot - G.matTube.uniforms.uHot.value)*Math.min(1, dt*3);
   if (toastT && now > toastT) { $("dToast").classList.remove("on"); toastT = 0; }
   $("dDepth").textContent = fmt(depth) + " km";
-  $("dLayer").textContent = lay[0].toUpperCase(); $("dLayer").style.color = lay[2];
-  $("dV1").textContent = "≈ " + fmt(tempAt(depth)) + " °C";
+  $("dLayer").textContent = layName.toUpperCase(); $("dLayer").style.color = layCol;
+  $("dV1").textContent = inWater ? "≈ 2 °C" : "≈ " + fmt(tempAt(depth)) + " °C";
   $("dV2").textContent = fmt(kmh) + " km/h";
   $("dV3").textContent = "T+ " + Math.round(u*T_HALF) + " min";
   if (u >= 1 && !dive.done) { dive.done = true; startWorld(); }
@@ -1316,7 +1560,7 @@ function slerpU(a, b, t) {
 const homeName = () => me.here ? me.here.n : "Toi";
 const timeIn = (ms, tz) => { try { return new Intl.DateTimeFormat("fr-FR", { timeZone: tz, hour: "2-digit", minute: "2-digit" }).format(ms); } catch (_) { return new Date(ms).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); } };
 async function startWorld() {
-  $("dLayer").textContent = "REMONTÉE…";
+  $("dLayer").textContent = "REMONTÉE…"; $("dFact").classList.remove("on"); dive.factEnd = 0; dive.factQ = [];
   try { await loadWorld(); } catch (_) { showArrival(); return; }
   if (!dive) return;
   const T = T3, c = dive.c;
@@ -1500,7 +1744,7 @@ function worldFrame(now, dt) {
     const wx = dive.wx;
     $("dTo").textContent = "SORTIE · " + c.n.toUpperCase();
     $("dDepth").textContent = fmt(alt/SR*RT) + " km";
-    $("dLayer").textContent = alt < 1.6 ? "SOUS LE CIEL DE " + c.n.toUpperCase() : "ALTITUDE"; $("dLayer").style.color = "#bff9ff";
+    $("dLayer").textContent = alt < 1.6 ? "SOUS LE CIEL " + (c.n === "Antipodes" ? "DES ANTIPODES" : "DE " + c.n.toUpperCase()) : "ALTITUDE"; $("dLayer").style.color = "#bff9ff";
     $("dV1").textContent = localTime(c) || fmtH(c.solar);
     $("dV2").textContent = wx ? WMO(wx.weather_code) : "…";
     $("dV3").textContent = wx ? Math.round(wx.temperature_2m) + " °C" : "…";
@@ -1532,6 +1776,7 @@ function worldFrame(now, dt) {
     $("dV3").textContent = timeIn(simMs, tz);
     if (p >= 1 && !dive.flDone) {
       dive.flDone = true;
+      if (dive.outbound) logTrip(c, "vol"); else { const k = carnet(); k.flights = (k.flights || 0) + 1; saveCarnet(k); }
       const wx = dive.outbound ? dive.wx : null;
       $("eN").textContent = "Atterrissage à " + (dive.outbound ? c.n : homeName());
       $("eTxt").textContent = fmt(c.km) + " km en " + fmtDur(dive.durH) + " de vol" + (c.km > 2200 ? ", contre 42 min par le tunnel" : "") + ". Il est " +
@@ -1576,6 +1821,8 @@ function antipodeTarget() {
   return c;
 }
 $("bCore").onclick = () => startDive(antipodeTarget());
+$("bBook").onclick = () => { renderCarnet(); $("carnet").classList.add("on"); };
+$("ckX").onclick = () => $("carnet").classList.remove("on");
 $("dClose").onclick = endDive;
 $("eBack").onclick = endDive;
 $("dPause").onclick = () => { if (!dive) return; dive.paused = !dive.paused; $("dPause").textContent = dive.paused ? "▶" : "❚❚"; };
