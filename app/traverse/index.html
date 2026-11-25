@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#05070a">
+<title>TRAVERSE · les capitales à travers la Terre</title>
+<style>
+:root{--c:#5ff3ff;--a:#ffb347;--m:#ff4fa3;--bg:#05070a}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:#e8f6ff;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(.35) brightness(.42) contrast(1.15);opacity:0;transition:opacity .8s}
+video.on{opacity:1}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hud{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:12px;right:12px;display:flex;justify-content:space-between;font-size:11px;line-height:1.5;letter-spacing:.08em;color:var(--c);text-shadow:0 0 6px rgba(95,243,255,.55);pointer-events:none}
+#hud b{color:#fff;font-weight:600}
+#hud .r{text-align:right}
+#warn{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 52px);transform:translateX(-50%);font-size:10px;color:var(--a);letter-spacing:.06em;text-align:center;pointer-events:none;width:90%}
+#tools{position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 78px);display:flex;flex-direction:column;gap:8px}
+#tools button{width:44px;height:44px;border-radius:10px;border:1px solid rgba(95,243,255,.35);background:rgba(5,10,16,.6);color:var(--c);font:600 10px/1 inherit;font-family:inherit;letter-spacing:.04em}
+#tools button.on{background:rgba(95,243,255,.18);color:#fff}
+#card{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 12px);padding:12px 14px;border:1px solid rgba(95,243,255,.35);background:rgba(5,10,16,.75);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:12px;font-size:12px;line-height:1.55;transform:translateY(150%);transition:transform .22s ease-out;pointer-events:none}
+#card.on{transform:none}
+#card .n{font-size:21px;color:#fff;letter-spacing:.03em}
+#card .k{color:var(--c);opacity:.75}
+#card .g{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:6px}
+#intro{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:32px;text-align:center;background:radial-gradient(circle at 50% 60%,#0b1a24 0%,#05070a 70%);z-index:10;transition:opacity .5s}
+#intro h1{font-size:38px;letter-spacing:.35em;color:#fff;text-shadow:0 0 18px rgba(95,243,255,.7);margin-right:-.35em}
+#intro p{font-size:13px;line-height:1.6;color:#9fc6d4;max-width:340px}
+#intro button{margin-top:8px;padding:14px 28px;border-radius:999px;border:1px solid var(--c);background:rgba(95,243,255,.1);color:#fff;font:600 13px inherit;font-family:inherit;letter-spacing:.2em}
+#intro small{font-size:10px;color:#5d7c88;max-width:300px;line-height:1.5}
+</style>
+</head>
+<body>
+<video id="vid" playsinline muted autoplay></video>
+<canvas id="cv"></canvas>
+
+<div id="hud">
+  <div><span>CAP <b id="hCap">---</b></span><br><span>INCL <b id="hInc">---</b></span></div>
+  <div class="r"><span id="hPos">---</span><br><span id="hSrc">---</span></div>
+</div>
+<div id="warn"></div>
+<div id="tools">
+  <button id="bCam" class="on">CAM</button>
+  <button id="bMode">HRZ</button>
+  <button id="bCal">NORD</button>
+</div>
+<div id="card">
+  <div class="n" id="cN"></div>
+  <div class="k" id="cC"></div>
+  <div class="g">
+    <div><span class="k">vol d'oiseau</span><br><b id="cKm"></b></div>
+    <div><span class="k">tunnel direct</span><br><b id="cCh"></b></div>
+    <div><span class="k">cap</span><br><b id="cAz"></b></div>
+    <div><span class="k">sous l'horizon</span><br><b id="cEl"></b></div>
+    <div><span class="k">soleil là-bas</span><br><b id="cSun"></b></div>
+    <div><span class="k">heure solaire</span><br><b id="cSol"></b></div>
+  </div>
+</div>
+
+<div id="intro">
+  <h1>TRAVERSE</h1>
+  <p>Ton téléphone devient une fenêtre à travers la Terre. Chaque capitale est affichée dans sa direction réelle, en ligne droite, sous tes pieds. Or : il y fait jour. Violet : crépuscule. Bleu, en croissant : il y fait nuit.</p>
+  <button id="go">ENTRER</button>
+  <small>Accès à la position, à la boussole et à la caméra. Rien ne quitte ton téléphone. Glisser horizontalement pour recaler le nord, pincer pour zoomer.</small>
+</div>
+
+<script>
+"use strict";
+// ---------- Données : capitale | pays | lat | lon | rang (1 = prioritaire à l'affichage)
+const CAPS = `Paris|France|48.86|2.35|1
+Londres|Royaume-Uni|51.51|-0.13|1
+Berlin|Allemagne|52.52|13.40|1
+Madrid|Espagne|40.42|-3.70|1
+Rome|Italie|41.90|12.50|1
+Moscou|Russie|55.76|37.62|1
+Lisbonne|Portugal|38.72|-9.14|2
+Bruxelles|Belgique|50.85|4.35|2
+Amsterdam|Pays-Bas|52.37|4.90|2
+Luxembourg|Luxembourg|49.61|6.13|3
+Berne|Suisse|46.95|7.45|2
+Vienne|Autriche|48.21|16.37|2
+Prague|Tchéquie|50.08|14.44|2
+Varsovie|Pologne|52.23|21.01|2
+Copenhague|Danemark|55.68|12.57|2
+Oslo|Norvège|59.91|10.75|2
+Stockholm|Suède|59.33|18.07|2
+Helsinki|Finlande|60.17|24.94|2
+Reykjavik|Islande|64.15|-21.94|2
+Dublin|Irlande|53.35|-6.26|2
+Athènes|Grèce|37.98|23.73|2
+Budapest|Hongrie|47.50|19.04|2
+Bratislava|Slovaquie|48.15|17.11|3
+Ljubljana|Slovénie|46.06|14.51|3
+Zagreb|Croatie|45.81|15.98|3
+Belgrade|Serbie|44.79|20.45|3
+Sarajevo|Bosnie-Herzégovine|43.86|18.41|3
+Podgorica|Monténégro|42.44|19.26|3
+Tirana|Albanie|41.33|19.82|3
+Skopje|Macédoine du Nord|42.00|21.43|3
+Pristina|Kosovo|42.66|21.17|3
+Sofia|Bulgarie|42.70|23.32|3
+Bucarest|Roumanie|44.43|26.10|2
+Chisinau|Moldavie|47.01|28.86|3
+Kiev|Ukraine|50.45|30.52|2
+Minsk|Biélorussie|53.90|27.57|3
+Vilnius|Lituanie|54.69|25.28|3
+Riga|Lettonie|56.95|24.11|3
+Tallinn|Estonie|59.44|24.75|3
+Andorre-la-Vieille|Andorre|42.51|1.52|3
+Monaco|Monaco|43.73|7.42|3
+Saint-Marin|Saint-Marin|43.94|12.45|3
+Vaduz|Liechtenstein|47.14|9.52|3
+La Valette|Malte|35.90|14.51|3
+Vatican|Vatican|41.90|12.45|3
+Nicosie|Chypre|35.17|33.36|3
+Ankara|Turquie|39.93|32.86|2
+Tbilissi|Géorgie|41.72|44.79|3
+Erevan|Arménie|40.18|44.51|3
+Bakou|Azerbaïdjan|40.41|49.87|3
+Jérusalem|Israël / Palestine|31.78|35.22|3
+Beyrouth|Liban|33.89|35.50|3
+Damas|Syrie|33.51|36.29|3
+Amman|Jordanie|31.95|35.93|3
+Bagdad|Irak|33.31|44.36|2
+Téhéran|Iran|35.69|51.39|2
+Riyad|Arabie saoudite|24.71|46.68|2
+Koweït|Koweït|29.38|47.99|3
+Manama|Bahreïn|26.23|50.59|3
+Doha|Qatar|25.29|51.53|3
+Abou Dabi|Émirats arabes unis|24.45|54.38|3
+Mascate|Oman|23.59|58.41|3
+Sanaa|Yémen|15.37|44.19|3
+Kaboul|Afghanistan|34.53|69.17|3
+Islamabad|Pakistan|33.68|73.05|2
+New Delhi|Inde|28.61|77.21|1
+Katmandou|Népal|27.72|85.32|3
+Thimphou|Bhoutan|27.47|89.64|3
+Dacca|Bangladesh|23.81|90.41|2
+Colombo|Sri Lanka|6.93|79.86|3
+Malé|Maldives|4.18|73.51|3
+Tachkent|Ouzbékistan|41.30|69.24|3
+Astana|Kazakhstan|51.17|71.45|2
+Bichkek|Kirghizistan|42.87|74.59|3
+Douchanbé|Tadjikistan|38.56|68.79|3
+Achgabat|Turkménistan|37.95|58.38|3
+Pékin|Chine|39.90|116.41|1
+Oulan-Bator|Mongolie|47.89|106.91|2
+Séoul|Corée du Sud|37.57|126.98|1
+Pyongyang|Corée du Nord|39.04|125.76|3
+Tokyo|Japon|35.68|139.69|1
+Taipei|Taïwan|25.03|121.57|3
+Hanoï|Viêt Nam|21.03|105.85|2
+Vientiane|Laos|17.97|102.63|3
+Phnom Penh|Cambodge|11.56|104.92|3
+Bangkok|Thaïlande|13.76|100.50|2
+Naypyidaw|Birmanie|19.76|96.08|3
+Kuala Lumpur|Malaisie|3.14|101.69|2
+Singapour|Singapour|1.35|103.82|2
+Jakarta|Indonésie|-6.21|106.85|1
+Bandar Seri Begawan|Brunei|4.90|114.94|3
+Manille|Philippines|14.60|120.98|2
+Dili|Timor oriental|-8.56|125.57|3
+Canberra|Australie|-35.28|149.13|1
+Wellington|Nouvelle-Zélande|-41.29|174.78|1
+Port Moresby|Papouasie-Nouvelle-Guinée|-9.44|147.18|3
+Honiara|Îles Salomon|-9.43|159.95|3
+Port-Vila|Vanuatu|-17.73|168.32|3
+Suva|Fidji|-18.14|178.44|3
+Nuku'alofa|Tonga|-21.14|-175.20|3
+Apia|Samoa|-13.83|-171.76|3
+Tarawa|Kiribati|1.33|172.98|3
+Majuro|Îles Marshall|7.09|171.38|3
+Palikir|Micronésie|6.92|158.16|3
+Ngerulmud|Palaos|7.50|134.62|3
+Funafuti|Tuvalu|-8.52|179.20|3
+Yaren|Nauru|-0.55|166.92|3
+Le Caire|Égypte|30.04|31.24|1
+Tripoli|Libye|32.89|13.19|3
+Tunis|Tunisie|36.81|10.18|2
+Alger|Algérie|36.75|3.06|2
+Rabat|Maroc|34.02|-6.83|2
+Nouakchott|Mauritanie|18.08|-15.98|3
+Dakar|Sénégal|14.72|-17.47|2
+Banjul|Gambie|13.45|-16.58|3
+Bissau|Guinée-Bissau|11.86|-15.60|3
+Conakry|Guinée|9.64|-13.58|3
+Freetown|Sierra Leone|8.48|-13.23|3
+Monrovia|Liberia|6.30|-10.80|3
+Yamoussoukro|Côte d'Ivoire|6.83|-5.29|3
+Accra|Ghana|5.60|-0.19|2
+Lomé|Togo|6.13|1.22|3
+Porto-Novo|Bénin|6.50|2.60|3
+Abuja|Nigeria|9.08|7.40|2
+Niamey|Niger|13.51|2.11|3
+Ouagadougou|Burkina Faso|12.37|-1.52|3
+Bamako|Mali|12.64|-8.00|3
+N'Djaména|Tchad|12.13|15.06|3
+Yaoundé|Cameroun|3.87|11.52|3
+Bangui|Centrafrique|4.39|18.56|3
+Malabo|Guinée équatoriale|3.75|8.78|3
+Libreville|Gabon|0.42|9.47|3
+Brazzaville|Congo|-4.27|15.28|3
+Kinshasa|RD Congo|-4.44|15.27|2
+Luanda|Angola|-8.84|13.23|2
+Khartoum|Soudan|15.50|32.56|2
+Djouba|Soudan du Sud|4.86|31.57|3
+Asmara|Érythrée|15.32|38.93|3
+Addis-Abeba|Éthiopie|9.03|38.74|2
+Djibouti|Djibouti|11.59|43.15|3
+Mogadiscio|Somalie|2.05|45.32|3
+Nairobi|Kenya|-1.29|36.82|2
+Kampala|Ouganda|0.35|32.58|3
+Kigali|Rwanda|-1.95|30.06|3
+Gitega|Burundi|-3.43|29.92|3
+Dodoma|Tanzanie|-6.16|35.75|3
+Lilongwe|Malawi|-13.96|33.79|3
+Lusaka|Zambie|-15.39|28.32|3
+Harare|Zimbabwe|-17.83|31.05|3
+Maputo|Mozambique|-25.97|32.57|3
+Gaborone|Botswana|-24.65|25.91|3
+Windhoek|Namibie|-22.56|17.08|3
+Pretoria|Afrique du Sud|-25.75|28.19|1
+Maseru|Lesotho|-29.31|27.48|3
+Mbabane|Eswatini|-26.31|31.14|3
+Antananarivo|Madagascar|-18.88|47.51|2
+Port-Louis|Maurice|-20.16|57.50|3
+Victoria|Seychelles|-4.62|55.45|3
+Moroni|Comores|-11.70|43.26|3
+Praia|Cap-Vert|14.93|-23.51|3
+São Tomé|Sao Tomé-et-Principe|0.34|6.73|3
+Washington|États-Unis|38.91|-77.04|1
+Ottawa|Canada|45.42|-75.70|1
+Mexico|Mexique|19.43|-99.13|1
+Guatemala|Guatemala|14.63|-90.51|3
+Belmopan|Belize|17.25|-88.76|3
+San Salvador|Salvador|13.69|-89.22|3
+Tegucigalpa|Honduras|14.07|-87.19|3
+Managua|Nicaragua|12.11|-86.24|3
+San José|Costa Rica|9.93|-84.08|3
+Panama|Panama|8.98|-79.52|3
+La Havane|Cuba|23.11|-82.37|2
+Kingston|Jamaïque|18.02|-76.80|3
+Port-au-Prince|Haïti|18.59|-72.31|3
+Saint-Domingue|Rép. dominicaine|18.49|-69.93|3
+Nassau|Bahamas|25.05|-77.36|3
+Bridgetown|Barbade|13.10|-59.62|3
+Port of Spain|Trinité-et-Tobago|10.65|-61.52|3
+Castries|Sainte-Lucie|14.01|-60.99|3
+Kingstown|Saint-Vincent-et-les-Grenadines|13.16|-61.23|3
+Saint-Georges|Grenade|12.05|-61.75|3
+Roseau|Dominique|15.30|-61.39|3
+Saint John's|Antigua-et-Barbuda|17.12|-61.85|3
+Basseterre|Saint-Kitts-et-Nevis|17.30|-62.72|3
+Caracas|Venezuela|10.48|-66.90|2
+Bogota|Colombie|4.71|-74.07|2
+Quito|Équateur|-0.18|-78.47|3
+Lima|Pérou|-12.05|-77.04|2
+La Paz|Bolivie|-16.50|-68.15|3
+Santiago|Chili|-33.45|-70.67|2
+Buenos Aires|Argentine|-34.60|-58.38|1
+Montevideo|Uruguay|-34.90|-56.16|3
+Asunción|Paraguay|-25.26|-57.58|3
+Brasília|Brésil|-15.79|-47.88|1
+Georgetown|Guyana|6.80|-58.16|3
+Paramaribo|Suriname|5.85|-55.20|3`.split("\n").map(l => {
+  const [n, c, la, lo, t] = l.split("|");
+  return { n, c, lat: +la, lon: +lo, t: +t };
+});
+
+// ---------- Maths
+const D = Math.PI / 180, RT = 6371;
+const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const neg = a => [-a[0], -a[1], -a[2]];
+const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0]/l, a[1]/l, a[2]/l]; };
+const rotZ = (v, t) => { const c = Math.cos(t), s = Math.sin(t); return [v[0]*c - v[1]*s, v[0]*s + v[1]*c, v[2]]; };
+const ecef = (la, lo) => [Math.cos(la*D)*Math.cos(lo*D), Math.cos(la*D)*Math.sin(lo*D), Math.sin(la*D)];
+// direction ENU (x=Est, y=Nord, z=Haut) depuis azimut/élévation en radians
+const dirAE = (az, el) => [Math.cos(el)*Math.sin(az), Math.cos(el)*Math.cos(az), Math.sin(el)];
+const CARD = ["N","NE","E","SE","S","SO","O","NO"];
+const cardOf = az => CARD[Math.round(((az % 360) + 360) % 360 / 45) % 8];
+const fmt = n => Math.round(n).toLocaleString("fr-FR");
+
+// ---------- État
+const me = { lat: 48.8566, lon: 2.3522, real: false, here: null };
+let raw = null, lastOri = 0, compassAbs = false;
+let offset = 0;                 // recalage du nord (rad)
+let yaw = 60*D, pitch = -25*D;  // mode sans capteurs (desktop)
+let fov = 65*D;
+let horizonMode = false;
+let B = null;                   // base caméra lissée {f,r,u}
+
+function enu() {
+  const la = me.lat*D, lo = me.lon*D;
+  return {
+    E: [-Math.sin(lo), Math.cos(lo), 0],
+    N: [-Math.sin(la)*Math.cos(lo), -Math.sin(la)*Math.sin(lo), Math.cos(la)],
+    U: [Math.cos(la)*Math.cos(lo), Math.cos(la)*Math.sin(lo), Math.sin(la)]
+  };
+}
+function computeCaps() {
+  const p0 = ecef(me.lat, me.lon);
+  const { E, N, U } = enu();
+  me.here = null;
+  for (const c of CAPS) {
+    const p = ecef(c.lat, c.lon);
+    const d = [p[0]-p0[0], p[1]-p0[1], p[2]-p0[2]];
+    const len = Math.hypot(d[0], d[1], d[2]);           // corde sur sphère unité
+    c.ang = 2*Math.asin(Math.min(1, len/2));
+    c.km = c.ang*RT;
+    c.chord = len*RT;
+    c.here = c.km < 25;
+    if (c.here) { me.here = c; continue; }
+    c.v = norm([dot(d, E), dot(d, N), dot(d, U)]);      // direction réelle, à travers la Terre
+    c.vh = norm([c.v[0], c.v[1], 0]);                   // direction ramenée sur l'horizon
+    c.az = (Math.atan2(c.v[0], c.v[1])/D + 360) % 360;
+    c.el = Math.asin(c.v[2])/D;
+  }
+}
+computeCaps();
+
+// ---------- Soleil : point subsolaire (précision ~0,5°), élévation du soleil pour chaque capitale
+const sun = { lat: 0, lon: 0, v: [0, 0, 1], el: 0 };
+function updateSun() {
+  const d = Date.now()/86400000 + 2440587.5 - 2451545.0;   // jours depuis J2000
+  const g = (357.529 + 0.98560028*d)*D, q = 280.459 + 0.98564736*d;
+  const L = (q + 1.915*Math.sin(g) + 0.020*Math.sin(2*g))*D;
+  const e = (23.439 - 0.00000036*d)*D;
+  const ra = Math.atan2(Math.cos(e)*Math.sin(L), Math.cos(L));
+  const dec = Math.asin(Math.sin(e)*Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908*d) % 24 + 24) % 24;
+  sun.lat = dec/D;
+  sun.lon = (((ra/D - gmst*15) % 360) + 540) % 360 - 180;
+  const s = ecef(sun.lat, sun.lon);
+  for (const c of CAPS) {
+    c.sunEl = Math.asin(Math.max(-1, Math.min(1, dot(ecef(c.lat, c.lon), s))))/D;
+    c.solar = ((12 + (c.lon - sun.lon)/15) % 24 + 24) % 24;
+  }
+  const { E, N, U } = enu();
+  sun.v = norm([dot(s, E), dot(s, N), dot(s, U)]);
+  sun.el = Math.asin(sun.v[2])/D;
+  lastFocus = undefined;          // rafraîchit la fiche
+}
+// jour = or, soleil bas = orange, crépuscule = violet, nuit = bleu
+function sunColor(el, a) {
+  if (el > 6) return `rgba(255,226,140,${a})`;
+  if (el > 0) return `rgba(255,164,84,${a})`;
+  if (el > -6) return `rgba(196,140,255,${a})`;
+  return `rgba(122,167,255,${a})`;
+}
+function sunState(el) {
+  return el > 6 ? "Jour" : el > 0 ? "Soleil bas" : el > -6 ? "Crépuscule" : "Nuit";
+}
+// pastille : soleil à rayons, demi-disque au crépuscule, croissant la nuit
+function sunDot(x, y, el, big, a) {
+  const col = sunColor(el, a), r = big ? 3.4 : 2.1;
+  ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+  if (el > 0) {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    if (big) for (let i = 0; i < 8; i++) {
+      const t = i*Math.PI/4;
+      ctx.beginPath(); ctx.moveTo(x + Math.cos(t)*5.2, y + Math.sin(t)*5.2); ctx.lineTo(x + Math.cos(t)*7.6, y + Math.sin(t)*7.6); ctx.stroke();
+    }
+  } else if (el > -6) {
+    ctx.beginPath(); ctx.arc(x, y, r, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(x, y, r*1.15, -Math.PI/2, Math.PI/2, true);
+    ctx.ellipse(x, y, r*0.5, r*1.15, 0, Math.PI/2, Math.PI*1.5, false);
+    ctx.fill();
+  }
+}
+const fmtH = h => String(Math.floor(h)).padStart(2, "0") + ":" + String(Math.floor((h % 1)*60)).padStart(2, "0");
+
+// ---------- Capteurs
+function onOri(e, absEvent) {
+  if (e.alpha == null && e.webkitCompassHeading == null) return;
+  let a;
+  if (typeof e.webkitCompassHeading === "number") { a = 360 - e.webkitCompassHeading; compassAbs = true; }
+  else { a = e.alpha; compassAbs = absEvent || e.absolute === true; }
+  raw = { a, b: e.beta || 0, g: e.gamma || 0 };
+  lastOri = performance.now();
+}
+function screenAngle() {
+  let a = (screen.orientation && typeof screen.orientation.angle === "number") ? screen.orientation.angle : (window.orientation || 0);
+  return ((a % 360) + 360) % 360;
+}
+function basisFromOri() {
+  const a = raw.a*D, b = raw.b*D, g = raw.g*D;
+  const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
+  // colonnes de R = Rz(α)·Rx(β)·Ry(γ) : axes du téléphone exprimés en ENU
+  const X = [cA*cG - sA*sB*sG, sA*cG + cA*sB*sG, -cB*sG];
+  const Y = [-sA*cB, cA*cB, sB];
+  const Z = [cA*sG + sA*sB*cG, sA*sG - cA*sB*cG, cB*cG];
+  const ang = screenAngle();
+  let r, u;
+  if (ang === 90) { r = neg(Y); u = X; }
+  else if (ang === 270) { r = Y; u = neg(X); }
+  else if (ang === 180) { r = neg(X); u = neg(Y); }
+  else { r = X; u = Y; }
+  return { f: rotZ(neg(Z), offset), r: rotZ(r, offset), u: rotZ(u, offset) };
+}
+function basisFromYawPitch() {
+  const f = dirAE(yaw, pitch);
+  const r = [Math.cos(yaw), -Math.sin(yaw), 0];
+  return { f, r, u: cross(r, f) };
+}
+const sensorLive = () => raw && performance.now() - lastOri < 1500;
+
+function smooth(t) {
+  if (!B) { B = t; return; }
+  const k = 0.22;
+  const mix = (p, q) => [p[0] + (q[0]-p[0])*k, p[1] + (q[1]-p[1])*k, p[2] + (q[2]-p[2])*k];
+  let f = norm(mix(B.f, t.f));
+  let r = mix(B.r, t.r);
+  const rf = dot(r, f);
+  r = norm([r[0]-f[0]*rf, r[1]-f[1]*rf, r[2]-f[2]*rf]);
+  B = { f, r, u: cross(r, f) };
+}
+
+// ---------- Rendu
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+let W = 0, H = 0, DPR = 1, F = 1, cx = 0, cy = 0;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  W = innerWidth; H = innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  cx = W/2; cy = H/2;
+}
+addEventListener("resize", resize); resize();
+
+function proj(v) {
+  const z = dot(v, B.f);
+  if (z < 0.12) return null;
+  return [cx + F*dot(v, B.r)/z, cy - F*dot(v, B.u)/z, z];
+}
+function curve(fn, n) {
+  ctx.beginPath();
+  let pen = false, px = 0, py = 0;
+  for (let i = 0; i <= n; i++) {
+    const p = proj(fn(i/n));
+    if (p && (!pen || Math.abs(p[0]-px) + Math.abs(p[1]-py) < W*1.5)) {
+      pen ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+      pen = true; px = p[0]; py = p[1];
+    } else pen = false;
+  }
+  ctx.stroke();
+}
+function label(txt, x, y, color, size, align) {
+  ctx.font = `${size}px ui-monospace,Menlo,monospace`;
+  ctx.textAlign = align || "left";
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)";
+  ctx.strokeText(txt, x, y);
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+}
+// couleur selon profondeur : ambre (proche) → magenta (antipodes)
+function depthColor(km, alpha) {
+  const t = Math.min(1, km/20000);
+  const r = 255, g = Math.round(179 - t*100), b = Math.round(71 + t*92);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+const RINGS = [2000, 5000, 10000, 15000];
+let focus = null;
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  if (!camOn) {
+    const g = ctx.createRadialGradient(cx, cy*1.3, 0, cx, cy*1.3, Math.max(W, H));
+    g.addColorStop(0, "#0b1a24"); g.addColorStop(1, "#05070a");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  F = (Math.max(W, H)/2) / Math.tan(fov/2);
+
+  // horizon
+  ctx.strokeStyle = "rgba(95,243,255,.75)"; ctx.lineWidth = 1.2;
+  curve(t => dirAE(t*2*Math.PI, 0), 180);
+
+  // graduations du cap sur l'horizon
+  for (let az = 0; az < 360; az += 10) {
+    const p = proj(dirAE(az*D, 0)); if (!p) continue;
+    const q = proj(dirAE(az*D, (az % 45 === 0 ? 2.2 : 1)*D)); if (!q) continue;
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+    if (az % 45 === 0) {
+      const l = proj(dirAE(az*D, 3.6*D));
+      if (l) label(CARD[az/45], l[0], l[1], az === 0 ? "#ff6b6b" : "#bff9ff", 13, "center");
+    }
+  }
+
+  if (!horizonMode) {
+    // anneaux de distance (plongée = moitié de l'angle au centre)
+    ctx.setLineDash([3, 6]); ctx.lineWidth = 1;
+    for (const km of RINGS) {
+      const el = -(km/RT)/2;
+      ctx.strokeStyle = depthColor(km, .35);
+      curve(t => dirAE(t*2*Math.PI, el), 120);
+      for (let az = 0; az < 360; az += 90) {
+        const p = proj(dirAE(az*D + 0.08, el));
+        if (p) label(fmt(km) + " km", p[0], p[1] - 4, depthColor(km, .6), 10, "center");
+      }
+    }
+    // méridiens vers le nadir
+    ctx.strokeStyle = "rgba(95,243,255,.12)";
+    for (let az = 0; az < 360; az += 30) curve(t => dirAE(az*D, -t*89.5*D), 40);
+    ctx.setLineDash([]);
+    // nadir = antipodes
+    const nd = proj([0, 0, -1]);
+    if (nd) {
+      ctx.strokeStyle = "rgba(255,79,163,.7)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(nd[0], nd[1], 14, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(nd[0], nd[1], 3, 0, 7); ctx.fillStyle = "#ff4fa3"; ctx.fill();
+      label("ANTIPODES · 20 015 km", nd[0], nd[1] + 30, "rgba(255,79,163,.85)", 10, "center");
+    }
+  }
+
+  // le soleil, dans sa vraie direction (à travers la Terre la nuit)
+  const sp = proj(sun.v);
+  if (sp) {
+    const glow = ctx.createRadialGradient(sp[0], sp[1], 0, sp[0], sp[1], 34);
+    glow.addColorStop(0, "rgba(255,226,140,.55)"); glow.addColorStop(1, "rgba(255,226,140,0)");
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(sp[0], sp[1], 34, 0, 7); ctx.fill();
+    ctx.fillStyle = "#ffe28c"; ctx.beginPath(); ctx.arc(sp[0], sp[1], 8, 0, 7); ctx.fill();
+    const t = "SOLEIL " + (sun.el >= 0 ? "+" : "") + Math.round(sun.el) + "°" + (sun.el < 0 ? " · à travers la Terre" : "");
+    label(t, sp[0], sp[1] + 26, "#ffe28c", 11, "center");
+  }
+
+  // capitales
+  const items = [];
+  for (const c of CAPS) {
+    if (c.here) continue;
+    const p = proj(horizonMode ? c.vh : c.v);
+    if (!p || p[0] < -80 || p[0] > W + 20 || p[1] < -20 || p[1] > H + 20) continue;
+    items.push({ c, x: p[0], y: p[1] });
+  }
+  items.sort((a, b) => a.c.t - b.c.t || a.c.km - b.c.km);
+  const placed = [];
+  focus = null; let best = 70*70;
+  for (const it of items) {
+    const c = it.c;
+    const dd = (it.x-cx)**2 + (it.y-cy)**2;
+    if (dd < best) { best = dd; focus = it; }
+    const size = Math.round(([0, 16, 13, 11][c.t]) * (1 - Math.min(c.km, 20000)/20000*0.3));
+    ctx.font = `${size}px ui-monospace,Menlo,monospace`;
+    const w = ctx.measureText(c.n).width;
+    const rect = [it.x + 8, it.y - size, it.x + 12 + w, it.y + 4];
+    const free = !placed.some(r => !(rect[2] < r[0] || rect[0] > r[2] || rect[3] < r[1] || rect[1] > r[3]));
+    const fade = 1 - Math.min(c.km, 20000)/20000*0.35;
+    sunDot(it.x, it.y, c.sunEl, free, free ? fade : .5);
+    if (free) {
+      placed.push(rect);
+      label(c.n, it.x + 10, it.y + 1, sunColor(c.sunEl, fade), size);
+      if (c.t === 1) label(fmt(c.km) + " km", it.x + 10, it.y + 12, "rgba(220,240,255,.55)", 9);
+    }
+  }
+
+  // focus
+  if (focus) {
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(focus.x, focus.y, 9, 0, 7); ctx.stroke();
+  }
+  // réticule
+  ctx.strokeStyle = "rgba(255,255,255,.6)"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - 22, cy); ctx.lineTo(cx - 8, cy); ctx.moveTo(cx + 8, cy); ctx.lineTo(cx + 22, cy);
+  ctx.moveTo(cx, cy - 22); ctx.lineTo(cx, cy - 8); ctx.moveTo(cx, cy + 8); ctx.lineTo(cx, cy + 22);
+  ctx.stroke();
+}
+
+// ---------- HUD
+const $ = id => document.getElementById(id);
+let lastFocus = null;
+function hud() {
+  const az = (Math.atan2(B.f[0], B.f[1])/D + 360) % 360;
+  const inc = Math.asin(Math.max(-1, Math.min(1, B.f[2])))/D;
+  $("hCap").textContent = String(Math.round(az) % 360).padStart(3, "0") + "° " + cardOf(az);
+  $("hInc").textContent = (inc >= 0 ? "+" : "") + Math.round(inc) + "°";
+  $("hPos").textContent = Math.abs(me.lat).toFixed(2) + (me.lat >= 0 ? "N " : "S ") + Math.abs(me.lon).toFixed(2) + (me.lon >= 0 ? "E" : "O");
+  $("hSrc").textContent = (me.real ? "GPS" : "POS. PAR DÉFAUT") + (me.here ? " · " + me.here.n.toUpperCase() : "");
+  let w = "";
+  if (started && !sensorLive()) w = "Pas de capteurs : glisse pour regarder autour";
+  else if (started && !compassAbs) w = "Boussole relative : glisse pour caler le nord";
+  $("warn").textContent = w;
+
+  const c = focus && focus.c;
+  if (c !== lastFocus) {
+    lastFocus = c;
+    $("card").classList.toggle("on", !!c);
+    if (c) {
+      $("cN").textContent = c.n; $("cC").textContent = c.c;
+      $("cKm").textContent = fmt(c.km) + " km";
+      $("cCh").textContent = fmt(c.chord) + " km";
+      $("cAz").textContent = Math.round(c.az) + "° " + cardOf(c.az);
+      $("cEl").textContent = (-c.el).toFixed(1) + "°";
+      $("cSun").textContent = sunState(c.sunEl) + " · " + (c.sunEl >= 0 ? "+" : "−") + Math.abs(Math.round(c.sunEl)) + "°";
+      $("cSun").style.color = sunColor(c.sunEl, 1);
+      $("cSol").textContent = fmtH(c.solar);
+    }
+  }
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  smooth(sensorLive() ? basisFromOri() : basisFromYawPitch());
+  draw();
+  hud();
+}
+
+// ---------- Gestes : 1 doigt = recalage / regard, 2 doigts = zoom
+const ptrs = new Map(); let pinch0 = 0, fov0 = fov;
+cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0]-b[0], a[1]-b[1]); fov0 = fov; } });
+cv.addEventListener("pointermove", e => {
+  if (!ptrs.has(e.pointerId)) return;
+  const prev = ptrs.get(e.pointerId); const dx = e.clientX - prev[0], dy = e.clientY - prev[1];
+  ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0]-b[0], a[1]-b[1]);
+    if (pinch0 > 0) fov = Math.max(15*D, Math.min(110*D, fov0 * pinch0 / d));
+  } else if (ptrs.size === 1) {
+    const k = fov / Math.max(W, H);
+    if (sensorLive()) offset += dx*k;
+    else { yaw -= dx*k; pitch = Math.max(-89*D, Math.min(89*D, pitch + dy*k)); }
+  }
+});
+const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; };
+cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+cv.addEventListener("wheel", e => { fov = Math.max(15*D, Math.min(110*D, fov * (1 + e.deltaY*0.001))); }, { passive: true });
+
+// ---------- Caméra
+const vid = $("vid"); let camOn = false, stream = null;
+async function camStart() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    vid.srcObject = stream; await vid.play().catch(() => {});
+    camOn = true; vid.classList.add("on"); $("bCam").classList.add("on");
+  } catch (_) { camStop(); }
+}
+function camStop() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; camOn = false; vid.classList.remove("on"); $("bCam").classList.remove("on");
+}
+$("bCam").onclick = () => camOn ? camStop() : camStart();
+$("bMode").onclick = () => { horizonMode = !horizonMode; $("bMode").classList.toggle("on", horizonMode); };
+$("bCal").onclick = () => { offset = 0; };
+
+// ---------- Démarrage
+let started = false;
+$("go").onclick = async () => {
+  try {
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+      await DeviceOrientationEvent.requestPermission();
+    }
+  } catch (_) {}
+  if ("ondeviceorientationabsolute" in window) addEventListener("deviceorientationabsolute", e => onOri(e, true));
+  else addEventListener("deviceorientation", e => onOri(e, false));
+
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(p => {
+      me.lat = p.coords.latitude; me.lon = p.coords.longitude; me.real = true; computeCaps(); updateSun();
+    }, () => {}, { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 });
+  }
+  camStart();
+  started = true;
+  const intro = $("intro"); intro.style.opacity = 0; setTimeout(() => intro.remove(), 500);
+};
+updateSun();
+setInterval(updateSun, 30000);
+loop();
+</script>
+</body>
+</html>
