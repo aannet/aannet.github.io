@@ -9,8 +9,6 @@
 :root{--c:#5ff3ff;--a:#ffb347;--m:#ff4fa3;--bg:#05070a}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:#e8f6ff;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(.35) brightness(.42) contrast(1.15);opacity:0;transition:opacity .8s}
-video.on{opacity:1}
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 #hud{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:12px;right:12px;display:flex;justify-content:space-between;font-size:11px;line-height:1.5;letter-spacing:.08em;color:var(--c);text-shadow:0 0 6px rgba(95,243,255,.55);pointer-events:none}
 #hud b{color:#fff;font-weight:600}
@@ -32,7 +30,6 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 </style>
 </head>
 <body>
-<video id="vid" playsinline muted autoplay></video>
 <canvas id="cv"></canvas>
 
 <div id="hud">
@@ -41,7 +38,6 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 </div>
 <div id="warn"></div>
 <div id="tools">
-  <button id="bCam" class="on">CAM</button>
   <button id="bMode">HRZ</button>
   <button id="bCal">NORD</button>
 </div>
@@ -54,7 +50,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
     <div><span class="k">cap</span><br><b id="cAz"></b></div>
     <div><span class="k">sous l'horizon</span><br><b id="cEl"></b></div>
     <div><span class="k">soleil là-bas</span><br><b id="cSun"></b></div>
-    <div><span class="k">heure solaire</span><br><b id="cSol"></b></div>
+    <div><span class="k">heure locale</span><br><b id="cSol"></b></div>
   </div>
 </div>
 
@@ -62,7 +58,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
   <h1>TRAVERSE</h1>
   <p>Ton téléphone devient une fenêtre à travers la Terre. Chaque capitale est affichée dans sa direction réelle, en ligne droite, sous tes pieds. Or : il y fait jour. Violet : crépuscule. Bleu, en croissant : il y fait nuit.</p>
   <button id="go">ENTRER</button>
-  <small>Accès à la position, à la boussole et à la caméra. Rien ne quitte ton téléphone. Glisser horizontalement pour recaler le nord, pincer pour zoomer.</small>
+  <small>Accès à la position et à la boussole. Rien ne quitte ton téléphone. Glisser horizontalement pour recaler le nord, pincer pour zoomer.</small>
 </div>
 
 <script>
@@ -268,6 +264,16 @@ Paramaribo|Suriname|5.85|-55.20|3`.split("\n").map(l => {
   return { n, c, lat: +la, lon: +lo, t: +t };
 });
 
+// fuseaux IANA pour l'heure légale
+const TZ = Object.fromEntries(`Paris=Europe/Paris;Londres=Europe/London;Berlin=Europe/Berlin;Madrid=Europe/Madrid;Rome=Europe/Rome;Moscou=Europe/Moscow;Lisbonne=Europe/Lisbon;Bruxelles=Europe/Brussels;Amsterdam=Europe/Amsterdam;Luxembourg=Europe/Luxembourg;Berne=Europe/Zurich;Vienne=Europe/Vienna;Prague=Europe/Prague;Varsovie=Europe/Warsaw;Copenhague=Europe/Copenhagen;Oslo=Europe/Oslo;Stockholm=Europe/Stockholm;Helsinki=Europe/Helsinki;Reykjavik=Atlantic/Reykjavik;Dublin=Europe/Dublin;Athènes=Europe/Athens;Budapest=Europe/Budapest;Bratislava=Europe/Bratislava;Ljubljana=Europe/Ljubljana;Zagreb=Europe/Zagreb;Belgrade=Europe/Belgrade;Sarajevo=Europe/Sarajevo;Podgorica=Europe/Podgorica;Tirana=Europe/Tirane;Skopje=Europe/Skopje;Pristina=Europe/Belgrade;Sofia=Europe/Sofia;Bucarest=Europe/Bucharest;Chisinau=Europe/Chisinau;Kiev=Europe/Kiev;Minsk=Europe/Minsk;Vilnius=Europe/Vilnius;Riga=Europe/Riga;Tallinn=Europe/Tallinn;Andorre-la-Vieille=Europe/Andorra;Monaco=Europe/Monaco;Saint-Marin=Europe/San_Marino;Vaduz=Europe/Vaduz;La Valette=Europe/Malta;Vatican=Europe/Vatican;Nicosie=Asia/Nicosia;Ankara=Europe/Istanbul;Tbilissi=Asia/Tbilisi;Erevan=Asia/Yerevan;Bakou=Asia/Baku;Jérusalem=Asia/Jerusalem;Beyrouth=Asia/Beirut;Damas=Asia/Damascus;Amman=Asia/Amman;Bagdad=Asia/Baghdad;Téhéran=Asia/Tehran;Riyad=Asia/Riyadh;Koweït=Asia/Kuwait;Manama=Asia/Bahrain;Doha=Asia/Qatar;Abou Dabi=Asia/Dubai;Mascate=Asia/Muscat;Sanaa=Asia/Aden;Kaboul=Asia/Kabul;Islamabad=Asia/Karachi;New Delhi=Asia/Kolkata;Katmandou=Asia/Kathmandu;Thimphou=Asia/Thimphu;Dacca=Asia/Dhaka;Colombo=Asia/Colombo;Malé=Indian/Maldives;Tachkent=Asia/Tashkent;Astana=Asia/Almaty;Bichkek=Asia/Bishkek;Douchanbé=Asia/Dushanbe;Achgabat=Asia/Ashgabat;Pékin=Asia/Shanghai;Oulan-Bator=Asia/Ulaanbaatar;Séoul=Asia/Seoul;Pyongyang=Asia/Pyongyang;Tokyo=Asia/Tokyo;Taipei=Asia/Taipei;Hanoï=Asia/Ho_Chi_Minh;Vientiane=Asia/Vientiane;Phnom Penh=Asia/Phnom_Penh;Bangkok=Asia/Bangkok;Naypyidaw=Asia/Yangon;Kuala Lumpur=Asia/Kuala_Lumpur;Singapour=Asia/Singapore;Jakarta=Asia/Jakarta;Bandar Seri Begawan=Asia/Brunei;Manille=Asia/Manila;Dili=Asia/Dili;Canberra=Australia/Sydney;Wellington=Pacific/Auckland;Port Moresby=Pacific/Port_Moresby;Honiara=Pacific/Guadalcanal;Port-Vila=Pacific/Efate;Suva=Pacific/Fiji;Nuku'alofa=Pacific/Tongatapu;Apia=Pacific/Apia;Tarawa=Pacific/Tarawa;Majuro=Pacific/Majuro;Palikir=Pacific/Pohnpei;Ngerulmud=Pacific/Palau;Funafuti=Pacific/Funafuti;Yaren=Pacific/Nauru;Le Caire=Africa/Cairo;Tripoli=Africa/Tripoli;Tunis=Africa/Tunis;Alger=Africa/Algiers;Rabat=Africa/Casablanca;Nouakchott=Africa/Nouakchott;Dakar=Africa/Dakar;Banjul=Africa/Banjul;Bissau=Africa/Bissau;Conakry=Africa/Conakry;Freetown=Africa/Freetown;Monrovia=Africa/Monrovia;Yamoussoukro=Africa/Abidjan;Accra=Africa/Accra;Lomé=Africa/Lome;Porto-Novo=Africa/Porto-Novo;Abuja=Africa/Lagos;Niamey=Africa/Niamey;Ouagadougou=Africa/Ouagadougou;Bamako=Africa/Bamako;N'Djaména=Africa/Ndjamena;Yaoundé=Africa/Douala;Bangui=Africa/Bangui;Malabo=Africa/Malabo;Libreville=Africa/Libreville;Brazzaville=Africa/Brazzaville;Kinshasa=Africa/Kinshasa;Luanda=Africa/Luanda;Khartoum=Africa/Khartoum;Djouba=Africa/Juba;Asmara=Africa/Asmara;Addis-Abeba=Africa/Addis_Ababa;Djibouti=Africa/Djibouti;Mogadiscio=Africa/Mogadishu;Nairobi=Africa/Nairobi;Kampala=Africa/Kampala;Kigali=Africa/Kigali;Gitega=Africa/Bujumbura;Dodoma=Africa/Dar_es_Salaam;Lilongwe=Africa/Blantyre;Lusaka=Africa/Lusaka;Harare=Africa/Harare;Maputo=Africa/Maputo;Gaborone=Africa/Gaborone;Windhoek=Africa/Windhoek;Pretoria=Africa/Johannesburg;Maseru=Africa/Maseru;Mbabane=Africa/Mbabane;Antananarivo=Indian/Antananarivo;Port-Louis=Indian/Mauritius;Victoria=Indian/Mahe;Moroni=Indian/Comoro;Praia=Atlantic/Cape_Verde;São Tomé=Africa/Sao_Tome;Washington=America/New_York;Ottawa=America/Toronto;Mexico=America/Mexico_City;Guatemala=America/Guatemala;Belmopan=America/Belize;San Salvador=America/El_Salvador;Tegucigalpa=America/Tegucigalpa;Managua=America/Managua;San José=America/Costa_Rica;Panama=America/Panama;La Havane=America/Havana;Kingston=America/Jamaica;Port-au-Prince=America/Port-au-Prince;Saint-Domingue=America/Santo_Domingo;Nassau=America/Nassau;Bridgetown=America/Barbados;Port of Spain=America/Port_of_Spain;Castries=America/St_Lucia;Kingstown=America/St_Vincent;Saint-Georges=America/Grenada;Roseau=America/Dominica;Saint John's=America/Antigua;Basseterre=America/St_Kitts;Caracas=America/Caracas;Bogota=America/Bogota;Quito=America/Guayaquil;Lima=America/Lima;La Paz=America/La_Paz;Santiago=America/Santiago;Buenos Aires=America/Argentina/Buenos_Aires;Montevideo=America/Montevideo;Asunción=America/Asuncion;Brasília=America/Sao_Paulo;Georgetown=America/Guyana;Paramaribo=America/Paramaribo`.split(";").map(x => x.split("=")));
+for (const c of CAPS) c.tz = TZ[c.n];
+function localTime(c) {
+  try {
+    if (!c.fmt) c.fmt = new Intl.DateTimeFormat("fr-FR", { timeZone: c.tz, hour: "2-digit", minute: "2-digit", weekday: "short" });
+    return c.fmt.format(new Date());
+  } catch (_) { return null; }
+}
+
 // ---------- Maths
 const D = Math.PI / 180, RT = 6371;
 const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
@@ -302,6 +308,7 @@ function enu() {
 function computeCaps() {
   const p0 = ecef(me.lat, me.lon);
   const { E, N, U } = enu();
+  me.p0 = p0; me.enu = { E, N, U };
   me.here = null;
   for (const c of CAPS) {
     const p = ecef(c.lat, c.lon);
@@ -319,6 +326,13 @@ function computeCaps() {
   }
 }
 computeCaps();
+
+// direction (ENU, à travers la Terre) d'un point du globe depuis l'utilisateur
+function geoDir(lat, lon) {
+  const p = ecef(lat, lon), q = me.p0, { E, N, U } = me.enu;
+  const d = [p[0]-q[0], p[1]-q[1], p[2]-q[2]];
+  return norm([dot(d, E), dot(d, N), dot(d, U)]);
+}
 
 // ---------- Soleil : point subsolaire (précision ~0,5°), élévation du soleil pour chaque capitale
 const sun = { lat: 0, lon: 0, v: [0, 0, 1], el: 0 };
@@ -468,7 +482,7 @@ let focus = null;
 
 function draw() {
   ctx.clearRect(0, 0, W, H);
-  if (!camOn) {
+  {
     const g = ctx.createRadialGradient(cx, cy*1.3, 0, cx, cy*1.3, Math.max(W, H));
     g.addColorStop(0, "#0b1a24"); g.addColorStop(1, "#05070a");
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -506,6 +520,19 @@ function draw() {
     ctx.strokeStyle = "rgba(95,243,255,.12)";
     for (let az = 0; az < 360; az += 30) curve(t => dirAE(az*D, -t*89.5*D), 40);
     ctx.setLineDash([]);
+    // équateur et tropiques, vus de l'intérieur de la Terre
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "rgba(120,255,190,.85)"; ctx.lineWidth = 1.6;
+    curve(t => geoDir(0, t*360 - 180), 240);
+    ctx.setLineDash([2, 5]); ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(120,255,190,.3)";
+    curve(t => geoDir(23.44, t*360 - 180), 180);
+    curve(t => geoDir(-23.44, t*360 - 180), 180);
+    ctx.setLineDash([]);
+    for (let lon = -180; lon < 180; lon += 60) {
+      const p = proj(geoDir(0, lon + me.lon));
+      if (p) label("ÉQUATEUR", p[0], p[1] - 6, "rgba(120,255,190,.9)", 10, "center");
+    }
     // nadir = antipodes
     const nd = proj([0, 0, -1]);
     if (nd) {
@@ -596,7 +623,7 @@ function hud() {
       $("cEl").textContent = (-c.el).toFixed(1) + "°";
       $("cSun").textContent = sunState(c.sunEl) + " · " + (c.sunEl >= 0 ? "+" : "−") + Math.abs(Math.round(c.sunEl)) + "°";
       $("cSun").style.color = sunColor(c.sunEl, 1);
-      $("cSol").textContent = fmtH(c.solar);
+      $("cSol").textContent = localTime(c) || (fmtH(c.solar) + " (solaire)");
     }
   }
 }
@@ -628,20 +655,6 @@ const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; };
 cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
 cv.addEventListener("wheel", e => { fov = Math.max(15*D, Math.min(110*D, fov * (1 + e.deltaY*0.001))); }, { passive: true });
 
-// ---------- Caméra
-const vid = $("vid"); let camOn = false, stream = null;
-async function camStart() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
-    vid.srcObject = stream; await vid.play().catch(() => {});
-    camOn = true; vid.classList.add("on"); $("bCam").classList.add("on");
-  } catch (_) { camStop(); }
-}
-function camStop() {
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  stream = null; camOn = false; vid.classList.remove("on"); $("bCam").classList.remove("on");
-}
-$("bCam").onclick = () => camOn ? camStop() : camStart();
 $("bMode").onclick = () => { horizonMode = !horizonMode; $("bMode").classList.toggle("on", horizonMode); };
 $("bCal").onclick = () => { offset = 0; };
 
@@ -661,7 +674,6 @@ $("go").onclick = async () => {
       me.lat = p.coords.latitude; me.lon = p.coords.longitude; me.real = true; computeCaps(); updateSun();
     }, () => {}, { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 });
   }
-  camStart();
   started = true;
   const intro = $("intro"); intro.style.opacity = 0; setTimeout(() => intro.remove(), 500);
 };
