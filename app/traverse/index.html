@@ -1176,7 +1176,7 @@ async function initWorld() {
   const globe = new T.Mesh(new T.SphereGeometry(SR, 256, 128), new T.ShaderMaterial({ uniforms: { uDay: { value: day }, uNight: { value: night }, uNrm: { value: nrm }, uSpec: { value: spec }, uSun, uCam }, vertexShader: GV, fragmentShader: GF }));
   globe.rotation.x = Math.PI/2; scene.add(globe);
   const cMat = new T.ShaderMaterial({ uniforms: { uC: { value: clouds }, uSun, uRot: { value: 0 }, uK: { value: 1.25 } }, vertexShader: GV, fragmentShader: CF, transparent: true, depthWrite: false, side: T.DoubleSide });
-  const cl = new T.Mesh(new T.SphereGeometry(SR*1.006, 128, 64), cMat); cl.rotation.x = Math.PI/2; scene.add(cl);
+  const cl = new T.Mesh(new T.SphereGeometry(SR*1.006, 128, 64), cMat); cl.rotation.x = Math.PI/2; cl.renderOrder = 1e6; scene.add(cl);   // toujours dessinés après les zones détaillées
   scene.add(new T.Mesh(new T.SphereGeometry(SR*1.035, 96, 48), new T.ShaderMaterial({ uniforms: { uSun, uCam }, vertexShader: GV, fragmentShader: AF, side: T.BackSide, transparent: true, blending: T.AdditiveBlending, depthWrite: false })));
   const sp = new Float32Array(3000*3);
   for (let i = 0; i < 3000; i++) { const v = norm([Math.random()*2 - 1, Math.random()*2 - 1, Math.random()*2 - 1]); sp.set([v[0]*2500, v[1]*2500, v[2]*2500], i*3); }
