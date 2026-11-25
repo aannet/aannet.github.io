@@ -1193,17 +1193,96 @@ async function initWorld() {
   const flown = new T.Line(new T.BufferGeometry(), new T.LineBasicMaterial({ color: 0xffffff }));
   scene.add(route, flown);
   // avion stylisé, nez vers +z
-  const plane = new T.Group(), pm = new T.MeshLambertMaterial({ color: 0xf2f4f7 }), am = new T.MeshLambertMaterial({ color: 0x5ff3ff });
-  const add3 = (geo, mat, rx, x, y, z) => { const m = new T.Mesh(geo, mat); m.rotation.x = rx; m.position.set(x, y, z); plane.add(m); };
-  add3(new T.CylinderGeometry(0.05, 0.035, 0.9, 12), pm, Math.PI/2, 0, 0, 0);
-  add3(new T.ConeGeometry(0.05, 0.14, 12), pm, Math.PI/2, 0, 0, 0.52);
-  add3(new T.BoxGeometry(0.95, 0.014, 0.17), pm, 0, 0, 0, 0.06);
-  add3(new T.BoxGeometry(0.32, 0.012, 0.08), pm, 0, 0, 0, -0.4);
-  add3(new T.BoxGeometry(0.012, 0.15, 0.1), am, 0, 0, 0.075, -0.4);
+  const air = makeAirliner(T, glowTex), plane = air.group;
   plane.scale.setScalar(4); plane.visible = false; scene.add(plane);
-  const sunL = new T.DirectionalLight(0xffffff, 2.2); scene.add(sunL, new T.AmbientLight(0xffffff, 0.45));
-  WD = { scene, cam, uSun, uCam, cMat, skyMat, sky, mA, mB, chord, route, flown, plane, sunL, night, nrm, spec, aniso: G.r.capabilities.getMaxAnisotropy(), patch: null, patchOld: null, po: 1 };
+  scene.add(new T.HemisphereLight(0xbfd9ff, 0x3a3226, 1.1));
+  const sunL = new T.DirectionalLight(0xffffff, 2.6); scene.add(sunL, new T.AmbientLight(0xffffff, 0.25));
+  WD = { scene, cam, uSun, uCam, cMat, skyMat, sky, mA, mB, chord, route, flown, plane, air, sunL, night, nrm, spec, aniso: G.r.capabilities.getMaxAnisotropy(), patch: null, patchOld: null, po: 1 };
   return WD;
+}
+// ---------- Avion de ligne procédural (biréacteur type A320/787, livrée fictive TRAVERSE), nez vers +z
+function makeAirliner(T, glowTex) {
+  const g = new T.Group();
+  // livrée : u = tour du fuselage (0 = ventre, 0,5 = dos), v = longueur (1 = nez)
+  const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 1024;
+  const x = cv.getContext("2d"), U = u => u*1024, V = v => (1 - v)*1024;
+  x.fillStyle = "#f3f5f8"; x.fillRect(0, 0, 1024, 1024);
+  const belly = x.createLinearGradient(0, 0, 1024, 0);
+  belly.addColorStop(0, "#b9c0ca"); belly.addColorStop(0.17, "#c9ced6"); belly.addColorStop(0.2, "#f3f5f8");
+  belly.addColorStop(0.8, "#f3f5f8"); belly.addColorStop(0.83, "#c9ced6"); belly.addColorStop(1, "#b9c0ca");
+  x.fillStyle = belly; x.fillRect(0, 0, 1024, 1024);
+  for (const u of [0.236, 0.764]) {                          // filet de livrée
+    x.fillStyle = "#1747b8"; x.fillRect(U(u) - 6, V(0.9), 12, V(0.06) - V(0.9));
+    x.fillStyle = "#5ff3ff"; x.fillRect(U(u) + (u < 0.5 ? -9 : 6), V(0.88), 3, V(0.1) - V(0.88));
+  }
+  x.fillStyle = "#1b2433";                                     // hublots, portes, cockpit
+  for (const u of [0.268, 0.732]) {
+    for (let v = 0.17; v < 0.8; v += 0.0125) if (Math.abs(v - 0.47) > 0.02) x.fillRect(U(u) - 4, V(v) - 3, 8, 6);
+    for (const v of [0.13, 0.47, 0.83]) { x.strokeStyle = "#9aa3ae"; x.lineWidth = 2; x.strokeRect(U(u) - 7, V(v) - 12, 14, 24); }
+  }
+  for (const [u0, u1] of [[0.3, 0.43], [0.57, 0.7]]) x.fillRect(U(u0), V(0.962), U(u1) - U(u0), V(0.948) - V(0.962));
+  const ftex = new T.CanvasTexture(cv); ftex.colorSpace = T.NoColorSpace; ftex.anisotropy = 8;
+  const body = new T.MeshStandardMaterial({ map: ftex, metalness: 0.15, roughness: 0.42 });
+  const wingM = new T.MeshStandardMaterial({ color: 0xd5dae1, metalness: 0.35, roughness: 0.38, side: T.DoubleSide });
+  const navy = new T.MeshStandardMaterial({ color: 0x163f9e, metalness: 0.2, roughness: 0.4, side: T.DoubleSide });
+  const dark = new T.MeshStandardMaterial({ color: 0x1a1f27, metalness: 0.6, roughness: 0.3, side: T.DoubleSide });
+  const R0 = 0.052, rad = y => y < -0.3 ? Math.max(0.006, R0*Math.pow((y + 0.5)/0.2, 0.75)) : y > 0.38 ? Math.max(0.003, R0*Math.sqrt(1 - Math.pow(1 - (0.5 - y)/0.12, 2))) : R0;
+  const prof = []; for (let i = 0; i <= 60; i++) { const y = -0.5 + i/60; prof.push(new T.Vector2(rad(y), y)); }
+  const fg = new T.LatheGeometry(prof, 40); fg.rotateX(Math.PI/2);
+  const fp = fg.attributes.position;                           // cône arrière relevé
+  for (let i = 0; i < fp.count; i++) { const z = fp.getZ(i); if (z < -0.3) fp.setY(i, fp.getY(i) + (-0.3 - z)*0.22); }
+  fg.computeVertexNormals();
+  g.add(new T.Mesh(fg, body));
+  // surfaces portantes : profil en plan extrudé
+  const surf = (pts, depth, mat) => {
+    const sh = new T.Shape(pts.map(([a, b]) => new T.Vector2(a, b)));
+    const geo = new T.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: depth*0.4, bevelSize: depth*0.35, bevelSegments: 2 });
+    return [geo, mat];
+  };
+  const wingPts = [[0.03, 0.11], [0.2, 0.0], [0.52, -0.16], [0.53, -0.205], [0.2, -0.13], [0.03, -0.11]];
+  for (const sgn of [1, -1]) {
+    const [wg, wm] = surf(wingPts, 0.008, wingM);
+    wg.rotateX(Math.PI/2); wg.translate(0, 0.004, 0);
+    const w = new T.Mesh(wg, wm); w.scale.x = sgn; w.position.set(0, -0.022, 0.02); w.rotation.z = sgn*0.09; g.add(w);
+    const [lg, lm] = surf([[0, 0], [0.05, 0.075], [0.075, 0.075], [0.045, 0]], 0.004, navy);     // ailette
+    lg.rotateY(Math.PI/2); const wl = new T.Mesh(lg, lm); wl.position.set(sgn*0.528, 0.024, -0.155); g.add(wl);
+    // réacteur sous l'aile
+    const nac = new T.Mesh(new T.CylinderGeometry(0.03, 0.025, 0.15, 24, 1, true), wingM); nac.rotation.x = Math.PI/2;
+    nac.position.set(sgn*0.17, -0.068, 0.07); g.add(nac);
+    const lip = new T.Mesh(new T.TorusGeometry(0.03, 0.005, 8, 24), navy); lip.position.set(sgn*0.17, -0.068, 0.145); g.add(lip);
+    const fan = new T.Mesh(new T.CircleGeometry(0.028, 24), dark); fan.position.set(sgn*0.17, -0.068, 0.135); g.add(fan);
+    const cone = new T.Mesh(new T.ConeGeometry(0.014, 0.04, 16), dark); cone.rotation.x = -Math.PI/2; cone.position.set(sgn*0.17, -0.068, -0.02); g.add(cone);
+    const py = new T.Mesh(new T.BoxGeometry(0.008, 0.03, 0.1), wingM); py.position.set(sgn*0.17, -0.042, 0.04); g.add(py);
+    // empennage horizontal
+    const [hg, hm] = surf([[0.02, -0.38], [0.2, -0.47], [0.2, -0.495], [0.02, -0.455]], 0.005, wingM);
+    hg.rotateX(Math.PI/2); const h = new T.Mesh(hg, hm); h.scale.x = sgn; h.position.y = 0.035; h.rotation.z = sgn*0.1; g.add(h);
+  }
+  const [vg, vm] = surf([[0.34, 0.045], [0.47, 0.24], [0.515, 0.24], [0.5, 0.045]], 0.008, navy);   // dérive
+  vg.rotateY(Math.PI/2); vg.translate(-0.004, 0, 0);
+  const vf = new T.Mesh(vg, vm); vf.scale.z = -1; g.add(vf);
+  // feux de navigation : rouge à gauche, vert à droite, flash blanc, anticollision rouge
+  const lamp = (col, px, py, pz, s) => { const sp = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: col, transparent: true, blending: T.AdditiveBlending, depthWrite: false })); sp.position.set(px, py, pz); sp.scale.setScalar(s); g.add(sp); return sp; };
+  const red = lamp(0xff3030, -0.535, 0.03, -0.16, 0.06), green = lamp(0x30ff60, 0.535, 0.03, -0.16, 0.06);
+  const strobes = [lamp(0xffffff, -0.54, 0.03, -0.18, 0.14), lamp(0xffffff, 0.54, 0.03, -0.18, 0.14), lamp(0xffffff, 0, 0.06, -0.52, 0.12)];
+  const beacons = [lamp(0xff2020, 0, 0.06, 0.05, 0.1), lamp(0xff2020, 0, -0.058, 0.0, 0.1)];
+  // traînées de condensation derrière les réacteurs
+  const trailM = new T.ShaderMaterial({ uniforms: { uK: { value: 0.4 } }, transparent: true, depthWrite: false, side: T.DoubleSide,
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
+    fragmentShader: "uniform float uK; varying vec2 vUv; void main(){ gl_FragColor = vec4(vec3(1.0), pow(vUv.y, 1.6)*uK); }" });
+  for (const sgn of [1, -1]) {
+    const tg = new T.CylinderGeometry(0.004, 0.022, 1.0, 12, 1, true); tg.rotateX(Math.PI/2);
+    const t = new T.Mesh(tg, trailM); t.position.set(sgn*0.17, -0.068, -0.05 - 0.5); g.add(t);
+  }
+  return {
+    group: g,
+    update(t, dayK) {
+      const st = (t % 1.2) < 0.06, bc = (t % 1.0) < 0.12;
+      for (const s2 of strobes) s2.visible = st;
+      for (const b2 of beacons) b2.visible = bc;
+      red.visible = green.visible = true;
+      trailM.uniforms.uK.value = 0.08 + 0.25*dayK;
+    }
+  };
 }
 function slerpU(a, b, t) {
   const T = T3, om = Math.acos(Math.max(-1, Math.min(1, a.dot(b))));
@@ -1244,7 +1323,7 @@ function showArrival() {
 }
 function startFlight() {
   if (!dive || !WD) return;
-  dive.phase = "flight"; dive.wt = 0; dive.yaw = 0; dive.speed = 1; dive.paused = false; dive.flDone = false;
+  dive.phase = "flight"; dive.wt = 0; dive.yaw = 0; dive.camK = 1; dive.speed = 1; dive.paused = false; dive.flDone = false;
   dive.durH = dive.c.km/850 + 0.5; dive.region = ""; dive.regT = 0;
   $("dSpd").textContent = "1×"; $("dPause").textContent = "❚❚";
   $("dEnd").classList.remove("on");
@@ -1252,7 +1331,7 @@ function startFlight() {
   $("dLayer").textContent = "11 000 m · 850 km/h"; $("dLayer").style.color = "#9fc6d4"; $("dDepth").style.fontSize = "30px";
   $("dL1").textContent = "temps de vol"; $("dL2").textContent = "reste"; $("dL3").textContent = "heure à " + (me.here ? me.here.n : "l'arrivée");
   WD.plane.visible = true; clearPatches();
-  toast("Glisse pour tourner autour de l'avion");
+  toast("Glisse pour tourner autour de l'avion, pince pour zoomer");
   if (!countries) fetch("countries.json").then(r => r.json()).then(j => {
     countries = j.map(k => {
       const rr = k.r.map(r => { let x = 0, y = 0; return r.split(" ").map(q => { const [a, b] = q.split(","); x += +a; y += +b; return [x/10, y/10]; }); });
@@ -1350,8 +1429,9 @@ function worldFrame(now, dt) {
     const pos = q.clone().multiplyScalar(SR + 0.25);
     WD.plane.position.copy(pos);
     WD.plane.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(right, up, fwd));
-    const off = fwd.clone().multiplyScalar(-15).addScaledVector(up, 9).applyAxisAngle(up, dive.yaw);
-    cam.position.copy(pos).add(off); cam.up.copy(up); cam.lookAt(pos.clone().addScaledVector(fwd, 9));
+    WD.air.update(now/1000, Math.max(0, Math.min(1, (q.dot(WD.uSun.value) + 0.1)/0.25)));
+    const off = fwd.clone().multiplyScalar(-15*dive.camK).addScaledVector(up, 9*dive.camK).applyAxisAngle(up, dive.yaw);
+    cam.position.copy(pos).add(off); cam.up.copy(up); cam.lookAt(pos.clone().addScaledVector(fwd, 9*dive.camK*Math.max(0, Math.cos(dive.yaw))));
     WD.flown.geometry.setDrawRange(0, Math.max(0, Math.floor(p*ROUTE_N) + 1));
     simMs = w.t0 + p*dive.durH*3600000;
     alt = cam.position.length() - SR;
@@ -1409,18 +1489,25 @@ $("dClose").onclick = endDive;
 $("eBack").onclick = endDive;
 $("dPause").onclick = () => { if (!dive) return; dive.paused = !dive.paused; $("dPause").textContent = dive.paused ? "▶" : "❚❚"; };
 $("dSpd").onclick = () => { if (!dive) return; dive.speed = dive.speed === 1 ? 3 : dive.speed === 3 ? 10 : 1; $("dSpd").textContent = dive.speed + "×"; };
-{ // regard libre dans le tunnel
-  let last = null;
+{ // regard libre dans le tunnel, rotation et zoom autour de l'avion
+  let last = null; const pts = new Map(); let pd = 0, k0 = 1;
   const dcv = $("dc");
-  dcv.addEventListener("pointerdown", e => { last = [e.clientX, e.clientY]; dcv.setPointerCapture(e.pointerId); });
+  const zoomK = k => { if (dive) dive.camK = Math.max(0.25, Math.min(2.2, k)); };
+  dcv.addEventListener("wheel", e => { if (dive && dive.phase === "flight") zoomK(dive.camK*(1 + e.deltaY*0.001)); }, { passive: true });
+  dcv.addEventListener("pointerdown", e => {
+    last = [e.clientX, e.clientY]; dcv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2 && dive) { const [a, b] = [...pts.values()]; pd = Math.hypot(a[0] - b[0], a[1] - b[1]); k0 = dive.camK || 1; }
+  });
   dcv.addEventListener("pointermove", e => {
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2 && dive && dive.phase === "flight") { const [a, b] = [...pts.values()]; if (pd) zoomK(k0*pd/Math.hypot(a[0] - b[0], a[1] - b[1])); return; }
     if (!last || !dive) return;
     dive.yaw = dive.phase === "flight" ? dive.yaw - (e.clientX - last[0])*0.006 : Math.max(-1.4, Math.min(1.4, dive.yaw - (e.clientX - last[0])*0.005));
     dive.pitch = Math.max(-1.2, Math.min(1.2, dive.pitch - (e.clientY - last[1])*0.005));
     last = [e.clientX, e.clientY];
   });
-  dcv.addEventListener("pointerup", () => { last = null; });
-  dcv.addEventListener("pointercancel", () => { last = null; });
+  dcv.addEventListener("pointerup", e => { last = null; pts.delete(e.pointerId); pd = 0; });
+  dcv.addEventListener("pointercancel", e => { last = null; pts.delete(e.pointerId); pd = 0; });
 }
 
 // ---------- Gestes : 1 doigt = recalage / regard, 2 doigts = zoom
