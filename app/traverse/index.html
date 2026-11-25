@@ -134,13 +134,13 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
     <div id="dTo"></div>
     <div id="dDepth"></div>
     <div id="dLayer"></div>
-    <div id="dRow"><span><b id="dL1">température</b><i id="dV1"></i></span><span><b id="dL2">vitesse</b><i id="dV2"></i></span><span><b id="dL3">temps</b><i id="dV3"></i></span></div>
+    <div id="dRow"><span><b id="dL1">température</b><i id="dV1"></i></span><span><b id="dL2">vitesse</b><i id="dV2"></i></span><span><b id="dL3">temps</b><i id="dV3"></i></span><span id="dG"><b>gravité</b><i id="dV4"></i></span></div>
   </div>
   <div id="dToast"></div>
   <div id="dFact"><div id="fT"></div><div id="fX"></div></div>
   <div id="dFrame"><span>COUPE · ATLAS</span></div>
   <div id="dLeg"></div>
-  <div id="dBtns"><button id="dClose">✕</button><button id="dPause">❚❚</button><button id="dSpd">1×</button></div>
+  <div id="dBtns"><button id="dClose">✕</button><button id="dPause">❚❚</button><button id="dSpd">1×</button><button id="dSnd">SON</button></div>
   <div id="dEnd">
     <div id="eN"></div>
     <div id="eTxt"></div>
@@ -881,7 +881,7 @@ void main() {
 }`;
 const FRAG = `
 uniform float uT; uniform vec3 uCam; uniform float uCut; uniform float uF; uniform vec3 uA; uniform vec3 uDir;
-uniform float uL; uniform vec3 uCrA; uniform vec3 uCrB; uniform float uCold; uniform float uHot;
+uniform float uL; uniform vec3 uCrA; uniform vec3 uCrB; uniform float uCold; uniform float uHot; uniform vec3 uE1;
 varying vec3 vW;
 #include <clipping_planes_pars_fragment>
 ` + RNOISE + `void main() {
@@ -940,7 +940,30 @@ varying vec3 vW;
   float d = distance(vW, uCam);
   vec3 nrm = normalize(cross(dFdx(vW), dFdy(vW)));             // normale du relief, éclairé par la lampe frontale
   float dif = abs(dot(nrm, normalize(uCam - vW)));
+  // fossiles d'ammonites dans les premiers kilomètres de croûte continentale
+  if (cr.z < 0.5 && km > cr.y + 0.3 && km < min(crust, 10.0)) {
+    vec3 rel = vW - uA; float sAx = dot(rel, uDir); vec3 rv = rel - uDir*sAx;
+    vec2 wuv = vec2(sAx, atan(dot(rv, cross(uDir, uE1)), dot(rv, uE1))*0.7)/0.9;
+    vec2 cell = floor(wuv), lc = fract(wuv) - 0.5;
+    float hh = fract(sin(dot(cell, vec2(12.9898, 78.233)))*43758.5453);
+    if (hh > 0.62) {
+      vec2 o2 = lc - (vec2(fract(hh*7.0), fract(hh*13.0)) - 0.5)*0.35;
+      float r = length(o2), th = atan(o2.y, o2.x);
+      float sp = fract(th/6.2831853 - log(max(r, 1e-3))/log(2.3));
+      float rib = abs(sin(th*26.0 + log(max(r, 1e-3))*7.0));
+      float line = step(r, 0.3)*(smoothstep(0.09, 0.0, min(sp, 1.0 - sp)) + smoothstep(0.18, 0.0, rib)*0.4);
+      col = mix(col, vec3(0.9, 0.82, 0.66), clamp(line, 0.0, 1.0)*0.9);
+    }
+  }
   vec3 o = col*(1.05/(1.0 + d*d*0.12))*(0.3 + 0.9*dif) + col*heat*0.55*exp(-d*0.018)*(0.6 + 0.4*dif);
+  // veines de magma lumineuses dans le manteau
+  float vk = step(crust, km)*(1.0 - step(660.0, km)) + 0.45*step(660.0, km)*(1.0 - step(2890.0, km));
+  float vein = smoothstep(0.975, 1.0, 1.0 - abs(snoise(p*0.7 + vec3(0.0, 0.0, uT*0.03))));
+  o += vec3(1.0, 0.35, 0.05)*vein*vk*1.8*exp(-d*0.02);
+  // diamants qui scintillent entre 150 et 200 km
+  float dm = smoothstep(130.0, 150.0, km)*(1.0 - smoothstep(200.0, 220.0, km));
+  float hd = fract(sin(dot(floor(vW*9.0), vec3(12.9898, 78.233, 37.719)))*43758.5453);
+  o += vec3(0.9, 0.97, 1.0)*step(0.965, hd)*pow(0.5 + 0.5*sin(uT*9.0 + hd*60.0), 12.0)*dm*3.0*exp(-d*0.12);
   gl_FragColor = vec4(o, 1.0);
 }`;
 
@@ -1084,6 +1107,57 @@ function renderCarnet() {
   const cs = k.cities || [];
   $("ckC").textContent = cs.length ? cs.join(" · ") : "Aucune ville atteinte pour l'instant.";
 }
+
+// ---------- Son procédural (Web Audio) : grondement, souffle, chocs aux frontières, bulles, cristaux ; vibrations
+const AU = { ctx: null, on: true, next: 0 };
+function audioInit() {
+  if (AU.ctx) { if (AU.ctx.state === "suspended") AU.ctx.resume(); return; }
+  try {
+    const C = new (window.AudioContext || window.webkitAudioContext)();
+    const master = C.createGain(); master.gain.value = 0; master.connect(C.destination);
+    const noise = brown => {
+      const n = C.sampleRate*2, b = C.createBuffer(1, n, C.sampleRate), d = b.getChannelData(0); let l = 0;
+      for (let i = 0; i < n; i++) { const w = Math.random()*2 - 1; if (brown) { l = (l + 0.02*w)/1.02; d[i] = l*3.5; } else d[i] = w; }
+      const src = C.createBufferSource(); src.buffer = b; src.loop = true; src.start(); return src;
+    };
+    const rf = C.createBiquadFilter(); rf.type = "lowpass"; rf.frequency.value = 120;
+    const rg = C.createGain(); rg.gain.value = 0; noise(true).connect(rf).connect(rg).connect(master);
+    const wf = C.createBiquadFilter(); wf.type = "bandpass"; wf.Q.value = 0.8; wf.frequency.value = 400;
+    const wg = C.createGain(); wg.gain.value = 0; noise(false).connect(wf).connect(wg).connect(master);
+    Object.assign(AU, { ctx: C, master, rf, rg, wf, wg });
+  } catch (_) { AU.ctx = null; }
+}
+function blip(f, dur, vol, type, up) {
+  const C = AU.ctx; if (!C) return;
+  const t = C.currentTime, o = C.createOscillator(), g = C.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f*(up ? 2.2 : 0.6), t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(AU.master); o.start(t); o.stop(t + dur + 0.05);
+}
+function boom(strong) {
+  try { if (navigator.vibrate) navigator.vibrate(strong ? [60, 40, 90] : 60); } catch (_) {}
+  const C = AU.ctx; if (!C) return;
+  const t = C.currentTime, o = C.createOscillator(), g = C.createGain();
+  o.type = "sine"; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(28, t + 1.0);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(strong ? 1.0 : 0.75, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+  o.connect(g).connect(AU.master); o.start(t); o.stop(t + 1.3);
+  blip(900, 0.25, 0.12, "triangle");
+}
+// spd = 0..1 ; mood = "rock" | "water" | "liq" | "ice" | "center" | "flight" | "off"
+function audioFrame(spd, mood, now) {
+  if (!AU.ctx) return;
+  const t = AU.ctx.currentTime, S = (p, v, k) => p.setTargetAtTime(v, t, k || 0.2);
+  S(AU.master.gain, AU.on && mood !== "off" ? (mood === "center" ? 0.35 : 0.9) : 0, 0.15);
+  if (mood === "flight") { S(AU.rg.gain, 0.22); S(AU.rf.frequency, 160); S(AU.wg.gain, 0.05); S(AU.wf.frequency, 900); return; }
+  S(AU.rg.gain, 0.25 + 0.6*spd); S(AU.rf.frequency, 70 + 260*spd);
+  S(AU.wg.gain, 0.03 + 0.18*spd*spd); S(AU.wf.frequency, (mood === "water" ? 150 : 250) + 1400*spd);
+  if (now < AU.next || !AU.on) return;
+  if (mood === "liq") { blip(150 + Math.random()*450, 0.09, 0.13, "sine"); AU.next = now + 40 + Math.random()*160; }
+  else if (mood === "ice") { blip(1800 + Math.random()*2600, 1.6, 0.05, "sine"); AU.next = now + 260 + Math.random()*700; }
+  else if (mood === "water") { blip(300 + Math.random()*500, 0.07, 0.09, "sine", true); AU.next = now + 80 + Math.random()*300; }
+  else if (mood === "center") { blip(220 + Math.random()*60, 2.5, 0.04, "sine"); AU.next = now + 1200; }
+  else AU.next = now + 200;
+}
 let T3 = null, G = null, dive = null, dLast = 0, toastT = 0;
 const loadThree = async () => T3 || (T3 = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"));
 function earthTexture() {
@@ -1118,12 +1192,17 @@ function initGL() {
   r.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
   r.outputColorSpace = T.LinearSRGBColorSpace;
   r.localClippingEnabled = true;
+  r.toneMapping = T.ACESFilmicToneMapping; r.toneMappingExposure = 1.15;   // n'affecte que les matériaux standards (avion, repères)
   const scene = new T.Scene();
   const camFP = new T.PerspectiveCamera(75, 1, 0.01, 600); camFP.layers.set(1);
+  // poussières flottantes autour de la capsule, visibles près du centre (apesanteur)
+  const motes = new T.Group(), mtex = new T.CanvasTexture(glowTexture());
+  for (let i = 0; i < 10; i++) { const m = new T.Sprite(new T.SpriteMaterial({ map: mtex, color: 0xfff1c0, transparent: true, opacity: 0, depthWrite: false })); m.scale.setScalar(0.02 + (i % 3)*0.012); m.layers.set(1); motes.add(m); }
+  motes.visible = false; camFP.add(motes);
   const camOut = new T.PerspectiveCamera(28, 1, 1, 3000); camOut.layers.set(2);
   const plane = new T.Plane(new T.Vector3(0, 0, 1), 0);
   const mk = cut => new T.ShaderMaterial({
-    uniforms: { uT: { value: 0 }, uCam: { value: new T.Vector3() }, uA: { value: new T.Vector3() }, uDir: { value: new T.Vector3(0, 1, 0) }, uL: { value: 1 }, uCrA: { value: new T.Vector3(35, 0, 0) }, uCrB: { value: new T.Vector3(35, 0, 0) }, uCold: { value: 0 }, uHot: { value: 0 }, uCut: { value: cut ? 1 : 0 }, uF: { value: cut ? 0.08 : 1 } },
+    uniforms: { uT: { value: 0 }, uCam: { value: new T.Vector3() }, uA: { value: new T.Vector3() }, uDir: { value: new T.Vector3(0, 1, 0) }, uL: { value: 1 }, uCrA: { value: new T.Vector3(35, 0, 0) }, uCrB: { value: new T.Vector3(35, 0, 0) }, uCold: { value: 0 }, uHot: { value: 0 }, uE1: { value: new T.Vector3(1, 0, 0) }, uCut: { value: cut ? 1 : 0 }, uF: { value: cut ? 0.08 : 1 } },
     vertexShader: VERT, fragmentShader: FRAG, side: T.BackSide, clipping: cut, clippingPlanes: cut ? [plane] : null
   });
   const matTube = mk(false), matCut = mk(true);
@@ -1138,7 +1217,8 @@ function initGL() {
   const glowTex = new T.CanvasTexture(glowTexture());
   const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0x9ff6ff, transparent: true, blending: T.AdditiveBlending, depthTest: false }));
   glow.scale.set(16, 16, 1); glow.layers.set(2); scene.add(glow);
-  G = { r, scene, camFP, camOut, plane, matTube, matCut, cap, glow, glowTex, tube: null, dust: null, line: null, w: 0, h: 0 };
+  scene.add(camFP);
+  G = { r, scene, camFP, camOut, motes, plane, matTube, matCut, cap, glow, glowTex, tube: null, dust: null, line: null, w: 0, h: 0 };
 }
 function setupDive(c) {
   const T = T3;
@@ -1154,6 +1234,7 @@ function setupDive(c) {
   G.matTube.uniforms.uCrA.value.set(ra.km, ra.water, ra.oc ? 1 : 0); G.matTube.uniforms.uCrB.value.set(rb.km, rb.water, rb.oc ? 1 : 0);
   // poussière dans le tunnel, teintée par la couche traversée : donne la sensation de vitesse
   let e1 = new T.Vector3().crossVectors(dir, A.clone().normalize()); if (e1.lengthSq() < 1e-6) e1.set(1, 0, 0).cross(dir); e1.normalize();
+  G.matTube.uniforms.uE1.value.copy(e1);
   const e2 = new T.Vector3().crossVectors(dir, e1);
   const n = Math.min(7000, Math.round(600 + L*45)), pos = new Float32Array(n*3), colr = new Float32Array(n*3), q = new T.Vector3(), cc = new T.Color();
   for (let i = 0; i < n; i++) {
@@ -1181,9 +1262,10 @@ function setupDive(c) {
 function toast(t) { $("dToast").textContent = t; $("dToast").classList.add("on"); toastT = performance.now() + 2800; }
 async function startDive(c) {
   if (!c) return;
+  audioInit();
   dive = { c, u: 0, speed: 1, paused: false, done: false, ready: false, yaw: 0, pitch: 0, layer: -2, phase: "tunnel" };
   dive.wxP = fetchWeather(c).then(w => { if (dive && dive.c === c) dive.wx = w; return w; });
-  $("dL1").textContent = "température"; $("dL2").textContent = "vitesse"; $("dL3").textContent = "temps";
+  $("dL1").textContent = "température"; $("dL2").textContent = "vitesse"; $("dL3").textContent = "temps"; $("dG").style.display = "";
   $("dLeg").style.display = ""; $("dFrame").style.display = ""; $("dDepth").style.fontSize = "";
   $("wlA").style.display = $("wlB").style.display = "none";
   dLast = performance.now();
@@ -1203,14 +1285,15 @@ async function startDive(c) {
   toast("Glisse pour regarder les parois");
 }
 function showFact(t, x, ms) { $("fT").textContent = t; $("fX").textContent = x; $("dFact").classList.add("on"); if (dive) dive.factEnd = performance.now() + (ms || 5500); }
-function endDive() { $("dFact").classList.remove("on"); clearPatches(); dive = null; $("dive").classList.remove("on"); lastFocus = undefined; precip(false); $("dToast").classList.remove("on"); }
+function endDive() { audioFrame(0, "off", 0); $("dFact").classList.remove("on"); clearPatches(); dive = null; $("dive").classList.remove("on"); lastFocus = undefined; precip(false); $("dToast").classList.remove("on"); }
 function diveFrame() {
   const now = performance.now(), dt = Math.min(0.05, (now - dLast)/1000); dLast = now;
   if (!dive.ready) return;
   if (dive.phase !== "tunnel") { worldFrame(now, dt); return; }
   const factOn = dive.factEnd > now;
   if (!factOn && dive.factEnd) { $("dFact").classList.remove("on"); dive.factEnd = 0; }
-  if (!dive.paused && dive.u < 1) dive.u = Math.min(1, dive.u + dt/DIVE_S*dive.speed*(factOn ? 0.3 : 1));   // ralenti pendant la lecture
+  const bullet = dive.bulletEnd > now;                                     // ralenti au centre de la Terre
+  if (!dive.paused && dive.u < 1) dive.u = Math.min(1, dive.u + dt/DIVE_S*dive.speed*(bullet ? 0.12 : factOn ? 0.3 : 1));   // ralenti pendant la lecture
   const c = dive.c, u = dive.u, half = c.chord/2;
   const x = half*Math.cos(Math.PI*u);
   const depth = Math.max(0, RT - Math.hypot(RT*Math.cos(c.ang/2), x));
@@ -1249,6 +1332,7 @@ function diveFrame() {
       const prev = dive.layer, lo2 = Math.min(Math.max(prev, 0), Math.max(lkey, 0));
       const what = prev === -1 || lkey === -1 ? "Plancher océanique" : lo2 === 0 ? "Discontinuité de Mohorovičić · " + crust + " km" : BOUND[lo2];
       toast(what + " → " + layName.toLowerCase());
+      boom(lkey >= 3 || prev >= 3);
     }
     dive.layer = lkey; dive.started = true;
     [...$("dLeg").children].forEach((d, i) => d.classList.toggle("on", i === li));
@@ -1290,6 +1374,13 @@ function diveFrame() {
   $("dLayer").textContent = layName.toUpperCase(); $("dLayer").style.color = layCol;
   $("dV1").textContent = inWater ? "≈ 2 °C" : "≈ " + fmt(tempAt(depth)) + " °C";
   $("dV2").textContent = fmt(kmh) + " km/h";
+  const gr = (RT - depth)/RT;                                              // Terre homogène : la pesanteur décroît linéairement vers le centre
+  $("dV4").textContent = gr.toFixed(2).replace(".", ",") + " g";
+  if (depth > RT - 120 && !dive.centerFx) { dive.centerFx = true; dive.bulletEnd = now + 3500; toast("Centre de la Terre · pesanteur nulle"); boom(true); }
+  const ctr = Math.max(0, Math.min(1, (depth - 5600)/600));
+  G.motes.visible = ctr > 0.01;
+  G.motes.children.forEach((m, i) => { m.material.opacity = ctr*0.9; m.position.set(Math.sin(now/1700 + i*2.1)*0.35, Math.cos(now/2100 + i*1.3)*0.25, -0.6 - (i % 4)*0.15); });
+  audioFrame(Math.sin(Math.PI*u), bullet || ctr > 0.9 ? "center" : inWater ? "water" : li === 3 ? "liq" : li === 4 ? "ice" : "rock", now);
   $("dV3").textContent = "T+ " + Math.round(u*T_HALF) + " min";
   if (u >= 1 && !dive.done) { dive.done = true; startWorld(); }
 }
@@ -1479,9 +1570,23 @@ async function initWorld() {
   // avion stylisé, nez vers +z
   const air = makeAirliner(T, glowTex), plane = air.group;
   plane.scale.setScalar(4); plane.visible = false; scene.add(plane);
-  scene.add(new T.HemisphereLight(0xbfd9ff, 0x3a3226, 1.1));
+  const hemi = new T.HemisphereLight(0xbfd9ff, 0x3a3226, 1.1); scene.add(hemi);
+  const envScene = new T.Scene(), envMat = new T.ShaderMaterial({
+    uniforms: { uUp: { value: new T.Vector3(0, 1, 0) }, uSunE: { value: new T.Vector3(1, 0, 0) }, uDay: { value: 1 } }, side: T.BackSide,
+    vertexShader: "varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.0); }",
+    fragmentShader: `uniform vec3 uUp; uniform vec3 uSunE; uniform float uDay; varying vec3 vD;
+void main(){
+  vec3 d = normalize(vD); float h = dot(d, uUp);
+  vec3 sky = mix(vec3(0.62,0.76,0.96), vec3(0.06,0.16,0.45), clamp(h*1.4, 0.0, 1.0));
+  vec3 gnd = mix(vec3(0.4,0.48,0.6), vec3(0.1,0.13,0.17), clamp(-h*5.0, 0.0, 1.0));
+  vec3 c = (h > 0.0 ? sky : gnd)*(0.05 + 0.95*uDay);
+  c += vec3(1.0,0.93,0.8)*pow(max(dot(d, uSunE), 0.0), 400.0)*40.0*uDay;
+  gl_FragColor = vec4(c, 1.0);
+}` });
+  envScene.add(new T.Mesh(new T.SphereGeometry(10, 32, 16), envMat));
+  const pmrem = new T.PMREMGenerator(G.r);
   const sunL = new T.DirectionalLight(0xffffff, 2.6); scene.add(sunL, new T.AmbientLight(0xffffff, 0.25));
-  WD = { scene, cam, uSun, uCam, uT, cMat, skyMat, sky, mA, mB, chord, route, flown, plane, air, sunL, night, nrm, spec, aniso: G.r.capabilities.getMaxAnisotropy(), patch: null, patchOld: null, po: 1 };
+  WD = { scene, cam, uSun, uCam, uT, cMat, skyMat, sky, mA, mB, chord, route, flown, plane, air, sunL, hemi, envScene, envMat, pmrem, envRT: null, envT: 0, night, nrm, spec, aniso: G.r.capabilities.getMaxAnisotropy(), patch: null, patchOld: null, po: 1 };
   return WD;
 }
 // ---------- Avion de ligne procédural (biréacteur type A320/787, livrée fictive TRAVERSE), nez vers +z
@@ -1505,11 +1610,56 @@ function makeAirliner(T, glowTex) {
     for (const v of [0.13, 0.47, 0.83]) { x.strokeStyle = "#9aa3ae"; x.lineWidth = 2; x.strokeRect(U(u) - 7, V(v) - 12, 14, 24); }
   }
   for (const [u0, u1] of [[0.3, 0.43], [0.57, 0.7]]) x.fillRect(U(u0), V(0.962), U(u1) - U(u0), V(0.948) - V(0.962));
+  x.strokeStyle = "rgba(85,95,110,.32)"; x.lineWidth = 1.5;                // lignes de panneaux
+  for (let v = 0.12; v < 0.93; v += 0.045) { x.beginPath(); x.moveTo(0, V(v)); x.lineTo(1024, V(v)); x.stroke(); }
+  for (const u of [0.12, 0.38, 0.62, 0.88]) { x.beginPath(); x.moveTo(U(u), V(0.06)); x.lineTo(U(u), V(0.95)); x.stroke(); }
+  x.fillStyle = "rgba(55,65,80,.28)"; x.fillRect(0, 0, 1024, V(0.976));    // radôme
   const ftex = new T.CanvasTexture(cv); ftex.colorSpace = T.NoColorSpace; ftex.anisotropy = 8;
-  const body = new T.MeshStandardMaterial({ map: ftex, metalness: 0.15, roughness: 0.42 });
-  const wingM = new T.MeshStandardMaterial({ color: 0xd5dae1, metalness: 0.35, roughness: 0.38, side: T.DoubleSide });
-  const navy = new T.MeshStandardMaterial({ color: 0x163f9e, metalness: 0.2, roughness: 0.4, side: T.DoubleSide });
+  const rc = document.createElement("canvas"); rc.width = rc.height = 1024;  // rugosité : peinture satinée, vitres lisses
+  const rx = rc.getContext("2d"); rx.fillStyle = "rgb(105,105,105)"; rx.fillRect(0, 0, 1024, 1024); rx.fillStyle = "rgb(12,12,12)";
+  for (const u of [0.268, 0.732]) for (let v = 0.17; v < 0.8; v += 0.0125) if (Math.abs(v - 0.47) > 0.02) rx.fillRect(U(u) - 4, V(v) - 3, 8, 6);
+  for (const [u0, u1] of [[0.3, 0.43], [0.57, 0.7]]) rx.fillRect(U(u0), V(0.962), U(u1) - U(u0), V(0.948) - V(0.962));
+  const rtex = new T.CanvasTexture(rc); rtex.colorSpace = T.NoColorSpace;
+  // aile : panneaux, bord d'attaque métallique, volets et ailerons (UV = coordonnées du profil en plan)
+  const wc = document.createElement("canvas"); wc.width = 1024; wc.height = 640;
+  const w2 = wc.getContext("2d"), WX = a => a/0.55*1024, WY = b => (1 - (b + 0.22)/0.34)*640;
+  const poly = (pts, dy) => { w2.beginPath(); pts.forEach(([a, b], i) => i ? w2.lineTo(WX(a), WY(b + dy)) : w2.moveTo(WX(a), WY(b + dy))); w2.stroke(); };
+  w2.fillStyle = "#cfd5dc"; w2.fillRect(0, 0, 1024, 640);
+  w2.strokeStyle = "rgba(80,90,105,.3)"; w2.lineWidth = 2;
+  for (let k = 0.08; k < 0.53; k += 0.05) { w2.beginPath(); w2.moveTo(WX(k), 0); w2.lineTo(WX(k), 640); w2.stroke(); }
+  const LE = [[0.03, 0.11], [0.2, 0.0], [0.52, -0.16]], TE = [[0.03, -0.11], [0.2, -0.13], [0.53, -0.205]];
+  w2.strokeStyle = "#f1f4f7"; w2.lineWidth = 16; poly(LE, -0.006);
+  w2.strokeStyle = "rgba(60,70,85,.65)"; w2.lineWidth = 3; poly(TE, 0.035); poly(TE, 0.065);
+  const teY = k => k < 0.2 ? -0.11 - 0.02*(k - 0.03)/0.17 : -0.13 - 0.075*(k - 0.2)/0.33;
+  for (const k of [0.1, 0.17, 0.26, 0.34, 0.42]) { w2.beginPath(); w2.moveTo(WX(k), WY(teY(k))); w2.lineTo(WX(k), WY(teY(k) + 0.065)); w2.stroke(); }
+  w2.fillStyle = "rgba(70,80,95,.18)"; w2.beginPath(); w2.moveTo(WX(0.42), WY(teY(0.42))); w2.lineTo(WX(0.53), WY(teY(0.53))); w2.lineTo(WX(0.53), WY(teY(0.53) + 0.035)); w2.lineTo(WX(0.42), WY(teY(0.42) + 0.035)); w2.fill();
+  const wtex = new T.CanvasTexture(wc); wtex.colorSpace = T.NoColorSpace; wtex.anisotropy = 8;
+  wtex.repeat.set(1/0.55, 1/0.34); wtex.offset.set(0, 0.22/0.34);
+  // dérive : livrée bleu marine, bande cyan, logo
+  const fc = document.createElement("canvas"); fc.width = fc.height = 512;
+  const f2 = fc.getContext("2d");
+  const fg2 = f2.createLinearGradient(0, 0, 512, 512); fg2.addColorStop(0, "#1e4fc4"); fg2.addColorStop(1, "#0d2a6e");
+  f2.fillStyle = fg2; f2.fillRect(0, 0, 512, 512);
+  f2.fillStyle = "#5ff3ff"; f2.beginPath(); f2.moveTo(0, 380); f2.lineTo(512, 120); f2.lineTo(512, 175); f2.lineTo(0, 435); f2.fill();
+  f2.fillStyle = "#ffffff"; f2.beginPath(); f2.arc(300, 210, 62, 0, 7); f2.fill();
+  f2.fillStyle = "#0d2a6e"; f2.font = "bold 84px ui-monospace,Menlo,monospace"; f2.textAlign = "center"; f2.textBaseline = "middle"; f2.fillText("T", 300, 214);
+  const ftx = new T.CanvasTexture(fc); ftx.colorSpace = T.NoColorSpace; ftx.repeat.set(1/0.18, 1/0.2); ftx.offset.set(-0.34/0.18, -0.045/0.2);
+  // soufflante : pales
+  const bc = document.createElement("canvas"); bc.width = bc.height = 256;
+  const b2c = bc.getContext("2d"); b2c.fillStyle = "#14181e"; b2c.fillRect(0, 0, 256, 256);
+  b2c.strokeStyle = "#5b6470"; b2c.lineWidth = 6;
+  for (let i = 0; i < 22; i++) { const a = i/22*6.283; b2c.beginPath(); b2c.moveTo(128 + Math.cos(a)*30, 128 + Math.sin(a)*30); b2c.quadraticCurveTo(128 + Math.cos(a + 0.25)*80, 128 + Math.sin(a + 0.25)*80, 128 + Math.cos(a + 0.4)*126, 128 + Math.sin(a + 0.4)*126); b2c.stroke(); }
+  b2c.fillStyle = "#c9d2dc"; b2c.beginPath(); b2c.arc(128, 128, 26, 0, 7); b2c.fill();
+  const btx = new T.CanvasTexture(bc); btx.colorSpace = T.NoColorSpace;
+  const body = new T.MeshPhysicalMaterial({ map: ftex, roughnessMap: rtex, roughness: 1, metalness: 0.05, clearcoat: 0.9, clearcoatRoughness: 0.12, envMapIntensity: 1.3 });
+  const wingM = new T.MeshPhysicalMaterial({ map: wtex, metalness: 0.55, roughness: 0.34, clearcoat: 0.3, side: T.DoubleSide });
+  const plain = new T.MeshPhysicalMaterial({ color: 0xd5dae1, metalness: 0.5, roughness: 0.34, clearcoat: 0.3, side: T.DoubleSide });
+  const navy = new T.MeshPhysicalMaterial({ color: 0x163f9e, metalness: 0.2, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1, side: T.DoubleSide });
+  const finM = new T.MeshPhysicalMaterial({ map: ftx, metalness: 0.2, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1, side: T.DoubleSide });
+  const chrome = new T.MeshStandardMaterial({ color: 0xe3e9f0, metalness: 1, roughness: 0.16 });
+  const fanM = new T.MeshStandardMaterial({ map: btx, metalness: 0.7, roughness: 0.35, side: T.DoubleSide });
   const dark = new T.MeshStandardMaterial({ color: 0x1a1f27, metalness: 0.6, roughness: 0.3, side: T.DoubleSide });
+  const mats = [body, wingM, plain, navy, finM, chrome, fanM, dark], fans = [];
   const R0 = 0.052, rad = y => y < -0.3 ? Math.max(0.006, R0*Math.pow((y + 0.5)/0.2, 0.75)) : y > 0.38 ? Math.max(0.003, R0*Math.sqrt(1 - Math.pow(1 - (0.5 - y)/0.12, 2))) : R0;
   const prof = []; for (let i = 0; i <= 60; i++) { const y = -0.5 + i/60; prof.push(new T.Vector2(rad(y), y)); }
   const fg = new T.LatheGeometry(prof, 40); fg.rotateX(Math.PI/2);
@@ -1531,17 +1681,17 @@ function makeAirliner(T, glowTex) {
     const [lg, lm] = surf([[0, 0], [0.05, 0.075], [0.075, 0.075], [0.045, 0]], 0.004, navy);     // ailette
     lg.rotateY(Math.PI/2); const wl = new T.Mesh(lg, lm); wl.position.set(sgn*0.528, 0.024, -0.155); g.add(wl);
     // réacteur sous l'aile
-    const nac = new T.Mesh(new T.CylinderGeometry(0.03, 0.025, 0.15, 24, 1, true), wingM); nac.rotation.x = Math.PI/2;
+    const nac = new T.Mesh(new T.CylinderGeometry(0.03, 0.025, 0.15, 24, 1, true), plain); nac.rotation.x = Math.PI/2;
     nac.position.set(sgn*0.17, -0.068, 0.07); g.add(nac);
-    const lip = new T.Mesh(new T.TorusGeometry(0.03, 0.005, 8, 24), navy); lip.position.set(sgn*0.17, -0.068, 0.145); g.add(lip);
-    const fan = new T.Mesh(new T.CircleGeometry(0.028, 24), dark); fan.position.set(sgn*0.17, -0.068, 0.135); g.add(fan);
+    const lip = new T.Mesh(new T.TorusGeometry(0.03, 0.005, 8, 24), chrome); lip.position.set(sgn*0.17, -0.068, 0.145); g.add(lip);
+    const fan = new T.Mesh(new T.CircleGeometry(0.028, 24), fanM); fan.position.set(sgn*0.17, -0.068, 0.135); g.add(fan); fans.push(fan);
     const cone = new T.Mesh(new T.ConeGeometry(0.014, 0.04, 16), dark); cone.rotation.x = -Math.PI/2; cone.position.set(sgn*0.17, -0.068, -0.02); g.add(cone);
-    const py = new T.Mesh(new T.BoxGeometry(0.008, 0.03, 0.1), wingM); py.position.set(sgn*0.17, -0.042, 0.04); g.add(py);
+    const py = new T.Mesh(new T.BoxGeometry(0.008, 0.03, 0.1), plain); py.position.set(sgn*0.17, -0.042, 0.04); g.add(py);
     // empennage horizontal
-    const [hg, hm] = surf([[0.02, -0.38], [0.2, -0.47], [0.2, -0.495], [0.02, -0.455]], 0.005, wingM);
+    const [hg, hm] = surf([[0.02, -0.38], [0.2, -0.47], [0.2, -0.495], [0.02, -0.455]], 0.005, plain);
     hg.rotateX(Math.PI/2); const h = new T.Mesh(hg, hm); h.scale.x = sgn; h.position.y = 0.035; h.rotation.z = sgn*0.1; g.add(h);
   }
-  const [vg, vm] = surf([[0.34, 0.045], [0.47, 0.24], [0.515, 0.24], [0.5, 0.045]], 0.008, navy);   // dérive
+  const [vg, vm] = surf([[0.34, 0.045], [0.47, 0.24], [0.515, 0.24], [0.5, 0.045]], 0.008, finM);   // dérive
   vg.rotateY(Math.PI/2); vg.translate(-0.004, 0, 0);
   const vf = new T.Mesh(vg, vm); g.add(vf);   // la rotation place déjà la dérive à l'arrière (z négatif)
   // feux de navigation : rouge à gauche, vert à droite, flash blanc, anticollision rouge
@@ -1559,7 +1709,10 @@ function makeAirliner(T, glowTex) {
   }
   return {
     group: g,
+    mats,
+    setEnv(tex) { for (const m of mats) { const first = !m.envMap; m.envMap = tex; if (first) m.needsUpdate = true; } },
     update(t, dayK) {
+      for (const f of fans) f.rotation.z = -t*30;
       const st = (t % 1.2) < 0.06, bc = (t % 1.0) < 0.12;
       for (const s2 of strobes) s2.visible = st;
       for (const b2 of beacons) b2.visible = bc;
@@ -1582,7 +1735,7 @@ async function startWorld() {
   if (!dive) return;
   const T = T3, c = dive.c;
   setupRoute(new T.Vector3(...c.p).normalize(), new T.Vector3(...me.p0).normalize(), c.n, homeName());
-  dive.phase = "emerge"; dive.wt = 0; dive.yaw = 0;
+  dive.phase = "emerge"; dive.wt = 0; dive.yaw = 0; $("dG").style.display = "none";
   $("dL1").textContent = "heure locale"; $("dL2").textContent = "météo"; $("dL3").textContent = "température";
 }
 // route de surface (grand cercle), corde du tunnel, repères et étiquettes : de C vers B
@@ -1604,12 +1757,13 @@ function setupRoute(C, B, nameC, nameB) {
 // aller en avion : de chez toi vers la ville choisie
 async function startPlane(c) {
   if (!c) return;
+  audioInit();
   dive = { c, u: 1, speed: 1, paused: false, done: true, ready: false, yaw: 0, pitch: 0, layer: -1, phase: "loading", outbound: true };
   dive.wxP = fetchWeather(c).then(w => { if (dive && dive.c === c) dive.wx = w; return w; });
   dLast = performance.now();
   $("dTo").textContent = "VOL · " + homeName().toUpperCase() + " → " + c.n.toUpperCase();
   $("dDepth").textContent = ""; $("dDepth").style.fontSize = "30px"; $("dLayer").textContent = "Préparation du vol…"; $("dLayer").style.color = "#9fc6d4";
-  $("dLeg").style.display = "none"; $("dFrame").style.display = "none"; $("dEnd").classList.remove("on");
+  $("dLeg").style.display = "none"; $("dFrame").style.display = "none"; $("dEnd").classList.remove("on"); $("dG").style.display = "none";
   $("dive").classList.add("on");
   try { await loadThree(); if (!G) initGL(); await loadWorld(); } catch (_) { $("dLayer").textContent = "Impossible de charger la scène (réseau)"; return; }
   if (!dive || dive.c !== c) return;
@@ -1739,6 +1893,7 @@ function placeLabel(el, v) {
 function worldFrame(now, dt) {
   const T = T3, w = dive.world, cam = WD.cam, r = G.r, c = dive.c;
   if (!dive.paused) dive.wt += dt*(dive.phase === "flight" ? dive.speed : 1);
+  audioFrame(0, dive.phase === "flight" && !dive.flDone ? "flight" : "off", now);
   let simMs = Date.now(), alt = 0;
   const cloud = dive.wx ? dive.wx.cloud_cover/100 : 0.3;
   if (dive.phase === "emerge" || dive.phase === "orbit" || dive.phase === "arrived") {
@@ -1777,7 +1932,17 @@ function worldFrame(now, dt) {
     const pos = q.clone().multiplyScalar(SR + 0.25);
     WD.plane.position.copy(pos);
     WD.plane.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(right, up, fwd));
-    WD.air.update(now/1000, Math.max(0, Math.min(1, (q.dot(WD.uSun.value) + 0.1)/0.25)));
+    const dayP = Math.max(0, Math.min(1, (q.dot(WD.uSun.value) + 0.1)/0.25));
+    WD.air.update(now/1000, dayP);
+    if (now > WD.envT) {                                   // reflets recalculés chaque seconde (verticale et soleil changent pendant le vol)
+      WD.envT = now + 1000;
+      WD.envMat.uniforms.uUp.value.copy(up); WD.envMat.uniforms.uSunE.value.copy(WD.uSun.value); WD.envMat.uniforms.uDay.value = dayP;
+      const rt = WD.pmrem.fromScene(WD.envScene, 0.02);
+      WD.air.setEnv(rt.texture); if (WD.envRT) WD.envRT.dispose(); WD.envRT = rt;
+    }
+    const warm = Math.max(0, Math.min(1, q.dot(WD.uSun.value)/0.3));        // lumière plus chaude soleil bas
+    WD.sunL.color.setRGB(1, 0.72 + 0.28*warm, 0.5 + 0.5*warm); WD.sunL.intensity = 3*dayP;
+    WD.hemi.intensity = 0.2 + 0.9*dayP;
     const off = fwd.clone().multiplyScalar(-15*dive.camK).addScaledVector(up, 9*dive.camK).applyAxisAngle(up, dive.yaw);
     cam.position.copy(pos).add(off); cam.up.copy(up); cam.lookAt(pos.clone().addScaledVector(fwd, 9*dive.camK*Math.max(0, Math.cos(dive.yaw))).addScaledVector(up, dive.pitch*14*dive.camK));   // glisser verticalement : lever les yeux vers l'horizon
     WD.flown.geometry.setDrawRange(0, Math.max(0, Math.floor(p*ROUTE_N) + 1));
@@ -1843,6 +2008,7 @@ $("ckX").onclick = () => $("carnet").classList.remove("on");
 $("dClose").onclick = endDive;
 $("eBack").onclick = endDive;
 $("dPause").onclick = () => { if (!dive) return; dive.paused = !dive.paused; $("dPause").textContent = dive.paused ? "▶" : "❚❚"; };
+$("dSnd").onclick = () => { AU.on = !AU.on; $("dSnd").textContent = AU.on ? "SON" : "MUET"; audioInit(); };
 $("dSpd").onclick = () => { if (!dive) return; dive.speed = dive.speed === 1 ? 3 : dive.speed === 3 ? 10 : 1; $("dSpd").textContent = dive.speed + "×"; };
 { // regard libre dans le tunnel, rotation et zoom autour de l'avion
   let last = null; const pts = new Map(); let pd = 0, k0 = 1;
