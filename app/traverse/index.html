@@ -830,21 +830,7 @@ const TEMP = [[0, 15], [35, 500], [660, 1900], [2890, 3700], [5150, 5000], [6371
 const layerIdx = d => GEO.findIndex(l => d < l[1]);
 function tempAt(d) { for (let i = 1; i < TEMP.length; i++) if (d <= TEMP[i][0]) { const [a, ta] = TEMP[i-1], [b, tb] = TEMP[i]; return ta + (tb - ta)*(d - a)/(b - a); } return 5400; }
 
-const VERT = `
-varying vec3 vW;
-#include <clipping_planes_pars_vertex>
-void main() {
-  vec4 w = modelMatrix * vec4(position, 1.0);
-  vW = w.xyz;
-  vec4 mvPosition = viewMatrix * w;
-  gl_Position = projectionMatrix * mvPosition;
-  #include <clipping_planes_vertex>
-}`;
-const FRAG = `
-uniform float uT; uniform vec3 uCam; uniform float uCut; uniform float uF; uniform vec3 uA; uniform vec3 uDir;
-uniform float uL; uniform vec3 uCrA; uniform vec3 uCrB; uniform float uCold; uniform float uHot;
-varying vec3 vW;
-#include <clipping_planes_pars_fragment>
+const RNOISE = `
 vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
 vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
 vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
@@ -869,7 +855,36 @@ float snoise(vec3 v){
   return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
 }
 float fbm(vec3 p){ float a=0.5, s=0.0; for(int i=0;i<3;i++){ s+=a*snoise(p); p*=2.07; a*=0.5; } return s; }
+`;
+const VERT = `
+uniform float uCut; uniform vec3 uA; uniform vec3 uDir; uniform float uT;
+varying vec3 vW;
+#include <clipping_planes_pars_vertex>
+` + RNOISE + `
 void main() {
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  if (uCut < 0.5) {                        // relief des parois du tunnel : rochers, cavités, ondes du fer liquide, cristaux
+    vec3 rel = w.xyz - uA, rad = rel - uDir*dot(rel, uDir);
+    float rl = length(rad); vec3 rn = rad/max(rl, 1e-4);
+    float km = (1.0 - length(w.xyz)/100.0)*6371.0;
+    vec3 q = w.xyz;
+    float mid = snoise(q*1.3)*0.5 + snoise(q*2.9)*0.25;
+    float d = mid*0.6 + smoothstep(0.35, 0.8, snoise(q*0.33))*1.3;
+    if (km > 2890.0 && km < 5150.0) d = 0.32*sin(dot(q, vec3(0.9, 0.4, 0.7))*2.0 - uT*2.5) + mid*0.25;
+    else if (km >= 5150.0) d = pow(abs(snoise(q*2.2)), 0.5)*0.9 - 0.25;
+    w.xyz += rn*rl*clamp(d, -0.38, 1.6);
+  }
+  vW = w.xyz;
+  vec4 mvPosition = viewMatrix * w;
+  gl_Position = projectionMatrix * mvPosition;
+  #include <clipping_planes_vertex>
+}`;
+const FRAG = `
+uniform float uT; uniform vec3 uCam; uniform float uCut; uniform float uF; uniform vec3 uA; uniform vec3 uDir;
+uniform float uL; uniform vec3 uCrA; uniform vec3 uCrB; uniform float uCold; uniform float uHot;
+varying vec3 vW;
+#include <clipping_planes_pars_fragment>
+` + RNOISE + `void main() {
   #include <clipping_planes_fragment>
   float km = (1.0 - length(vW)/100.0) * 6371.0;
   vec3 p = vW * uF;
@@ -920,10 +935,12 @@ void main() {
   if (cr.y > 0.0) b = min(b, abs(km - cr.y));
   col *= 0.7 + 0.5*(snoise(vW*16.0)*0.5 + 0.5);          // grain de la roche
   float f = abs(fract(dot(vW - uA, uDir)/1.5) - 0.5);       // anneaux de cuvelage du tunnel
-  col *= 1.0 - 0.5*smoothstep(0.44, 0.5, f);
+  col *= 1.0 - 0.2*smoothstep(0.46, 0.5, f);
   col = mix(col, vec3(1.0,0.97,0.9), smoothstep(5.0, 0.0, b)*0.85);
   float d = distance(vW, uCam);
-  vec3 o = col*(0.95/(1.0 + d*d*0.12)) + col*heat*0.55*exp(-d*0.018);
+  vec3 nrm = normalize(cross(dFdx(vW), dFdy(vW)));             // normale du relief, éclairé par la lampe frontale
+  float dif = abs(dot(nrm, normalize(uCam - vW)));
+  vec3 o = col*(1.05/(1.0 + d*d*0.12))*(0.3 + 0.9*dif) + col*heat*0.55*exp(-d*0.018)*(0.6 + 0.4*dif);
   gl_FragColor = vec4(o, 1.0);
 }`;
 
@@ -1128,7 +1145,7 @@ function setupDive(c) {
   for (const k of ["tube", "dust", "line"]) if (G[k]) { G.scene.remove(G[k]); G[k].geometry.dispose(); if (k !== "tube") G[k].material.dispose(); G[k] = null; }
   const A = new T.Vector3(...me.p0).multiplyScalar(SR), Bp = new T.Vector3(...c.p).multiplyScalar(SR);
   const dir = Bp.clone().sub(A), L = dir.length(); dir.normalize();
-  const tube = new T.Mesh(new T.CylinderGeometry(TUBE_R, TUBE_R, L + 2, 64, 1, true), G.matTube);
+  const tube = new T.Mesh(new T.CylinderGeometry(TUBE_R, TUBE_R, L + 2, 72, Math.min(2400, Math.ceil((L + 2)*11)), true), G.matTube);
   tube.position.copy(A).add(Bp).multiplyScalar(0.5);
   tube.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir);
   tube.layers.set(1); G.scene.add(tube); G.tube = tube;
