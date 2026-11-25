@@ -1285,6 +1285,13 @@ async function startDive(c) {
   toast("Glisse pour regarder les parois");
 }
 function showFact(t, x, ms) { $("fT").textContent = t; $("fX").textContent = x; $("dFact").classList.add("on"); if (dive) dive.factEnd = performance.now() + (ms || 5500); }
+function gyroDelta() {
+  if (!sensorLive()) return null;
+  const T = T3; smooth(basisFromOri());
+  const q = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(new T.Vector3(...B.r), new T.Vector3(...B.u), new T.Vector3(...neg(B.f))));
+  if (!dive.gref) dive.gref = q.clone();                // orientation de référence = position du téléphone au départ
+  return dive.gref.clone().invert().multiply(q);
+}
 function endDive() { audioFrame(0, "off", 0); $("dFact").classList.remove("on"); clearPatches(); dive = null; $("dive").classList.remove("on"); lastFocus = undefined; precip(false); $("dToast").classList.remove("on"); }
 function diveFrame() {
   const now = performance.now(), dt = Math.min(0.05, (now - dLast)/1000); dLast = now;
@@ -1308,6 +1315,7 @@ function diveFrame() {
   camFP.up.copy(dive.upv);
   camFP.lookAt(pos.clone().add(dive.dir));
   camFP.rotateY(dive.yaw); camFP.rotateX(dive.pitch);
+  { const gq = gyroDelta(); if (gq) camFP.quaternion.multiply(gq); }
   for (const m of [G.matTube, G.matCut]) m.uniforms.uT.value = now/1000;
   G.matTube.uniforms.uCam.value.copy(camFP.position);
   G.cap.position.copy(pos); G.glow.position.copy(pos);
@@ -1586,6 +1594,7 @@ void main(){
   envScene.add(new T.Mesh(new T.SphereGeometry(10, 32, 16), envMat));
   const pmrem = new T.PMREMGenerator(G.r);
   const sunL = new T.DirectionalLight(0xffffff, 2.6); scene.add(sunL, new T.AmbientLight(0xffffff, 0.25));
+  setTimeout(() => loadCountries().then(cs => { if (cs) buildBorders(cs); }), 0);
   WD = { scene, cam, uSun, uCam, uT, cMat, skyMat, sky, mA, mB, chord, route, flown, plane, air, sunL, hemi, envScene, envMat, pmrem, envRT: null, envT: 0, night, nrm, spec, aniso: G.r.capabilities.getMaxAnisotropy(), patch: null, patchOld: null, po: 1 };
   return WD;
 }
@@ -1794,15 +1803,30 @@ function startFlight() {
   $("dL1").textContent = "temps de vol"; $("dL2").textContent = "reste"; $("dL3").textContent = "heure à " + (dive.outbound ? dive.c.n : homeName());
   WD.plane.visible = true; clearPatches();
   toast("Glisse pour tourner autour de l'avion, pince pour zoomer");
-  if (!countries) fetch("countries.json").then(r => r.json()).then(j => {
-    countries = j.map(k => {
-      const rr = k.r.map(r => { let x = 0, y = 0; return r.split(" ").map(q => { const [a, b] = q.split(","); x += +a; y += +b; return [x/10, y/10]; }); });
-      // anneaux qui franchissent l'antiméridien (Russie, Fidji…) : longitudes déroulées sur 0–360
-      let wrap = false;
-      for (const r of rr) if (r.some((q, i) => i && Math.abs(q[0] - r[i-1][0]) > 180)) { wrap = true; for (const q of r) if (q[0] < 0) q[0] += 360; }
-      return { n: k.n, b: k.b, rr, wrap };
-    });
-  }).catch(() => {});
+  loadCountries();
+}
+let CP = null;
+const loadCountries = () => CP || (CP = fetch("countries.json").then(r => r.json()).then(j => {
+  countries = j.map(k => {
+    const rr = k.r.map(r => { let x = 0, y = 0; return r.split(" ").map(q => { const [a, b] = q.split(","); x += +a; y += +b; return [x/10, y/10]; }); });
+    // anneaux qui franchissent l'antiméridien (Russie, Fidji…) : longitudes déroulées sur 0–360
+    let wrap = false;
+    for (const r of rr) if (r.some((q, i) => i && Math.abs(q[0] - r[i-1][0]) > 180)) { wrap = true; for (const q of r) if (q[0] < 0) q[0] += 360; }
+    return { n: k.n, b: k.b, rr, wrap };
+  });
+  return countries;
+}).catch(() => null));
+// frontières des pays, en traits fins et discrets juste au-dessus du sol
+function buildBorders(cs) {
+  const T = T3, pos = [], R = SR*1.0012;
+  for (const k of cs) for (const r of k.rr) for (let i = 1; i < r.length; i++) {
+    const a = r[i-1], b = r[i]; if (Math.abs(b[0] - a[0]) > 180) continue;
+    const p = ecef(a[1], a[0]), q = ecef(b[1], b[0]);
+    pos.push(p[0]*R, p[1]*R, p[2]*R, q[0]*R, q[1]*R, q[2]*R);
+  }
+  const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
+  const ln = new T.LineSegments(g, new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, depthWrite: false }));
+  ln.renderOrder = 1e5; WD.scene.add(ln);
 }
 const SEAS = [["Mer Baltique", 53, 66, 9, 30], ["Mer du Nord", 51, 61, -4, 9], ["Mer Noire", 40.5, 47, 27, 42], ["Mer Caspienne", 36, 47.5, 46, 55],
   ["Mer Rouge", 12, 30, 32, 44], ["Golfe Persique", 23, 30.5, 47, 57], ["Mer Méditerranée", 30, 46, -6, 37], ["Mer du Japon", 34, 52, 127, 142],
@@ -1879,6 +1903,36 @@ function drawFlare(cam) {
     const gg = g.createRadialGradient(gx, gy, 0, gx, gy, r);
     gg.addColorStop(0, `rgba(${c},${A*0.5})`); gg.addColorStop(0.75, `rgba(${c},${A})`); gg.addColorStop(1, `rgba(${c},0)`);
     g.fillStyle = gg; g.beginPath(); g.arc(gx, gy, r, 0, 7); g.fill();
+  }
+  g.restore();
+}
+const _cv = [null, null];
+function drawCities(cam) {
+  const T = T3, g = wxg, w = innerWidth, h = innerHeight, P = cam.position;
+  if (!_cv[0]) { _cv[0] = new T.Vector3(); _cv[1] = new T.Vector3(); }
+  const v = _cv[0], tc = _cv[1], items = [], skip = [dive.c.n, me.here && me.here.n];
+  for (const c of CAPS) {
+    if (skip.includes(c.n)) continue;
+    v.set(c.p[0], c.p[1], c.p[2]).multiplyScalar(SR*1.002);
+    tc.copy(P).sub(v);
+    if (v.dot(tc) <= 0) continue;                       // de l'autre côté de l'horizon
+    const dist = tc.length(); v.project(cam);
+    if (v.z > 1 || Math.abs(v.x) > 0.98 || Math.abs(v.y) > 0.98) continue;
+    items.push([c, (v.x + 1)/2*w, (1 - v.y)/2*h, dist]);
+  }
+  items.sort((a, b) => a[0].t - b[0].t || a[3] - b[3]);
+  const placed = []; let n = 0;
+  g.save(); g.textBaseline = "middle"; g.lineJoin = "round";
+  for (const [c, x, y, dist] of items) {
+    if (n > 45) break;
+    const fs = Math.round(Math.max(9, Math.min(14, 15 - dist/45)) + (c.t === 1 ? 1 : 0));
+    g.font = (c.t === 1 ? "600 " : "") + fs + "px ui-monospace,Menlo,monospace";
+    const tw = g.measureText(c.n).width, rc = [x - 4, y - fs/2 - 2, x + 9 + tw, y + fs/2 + 2];
+    if (placed.some(q => !(rc[2] < q[0] || rc[0] > q[2] || rc[3] < q[1] || rc[1] > q[3]))) continue;
+    placed.push(rc); n++;
+    g.fillStyle = "#ffffff"; g.beginPath(); g.arc(x, y, c.t === 1 ? 2.6 : 1.8, 0, 7); g.fill();
+    g.lineWidth = 3; g.strokeStyle = "rgba(0,0,0,.7)"; g.strokeText(c.n, x + 7, y);
+    g.fillStyle = c.t === 1 ? "#ffffff" : "rgba(235,245,255,.85)"; g.fillText(c.n, x + 7, y);
   }
   g.restore();
 }
@@ -1983,7 +2037,9 @@ function worldFrame(now, dt) {
   if (ww !== G.w || hh !== G.h) { G.w = ww; G.h = hh; r.setSize(ww, hh, false); }
   if (cam.aspect !== ww/hh) { cam.aspect = ww/hh; cam.updateProjectionMatrix(); }
   r.setScissorTest(false); r.setViewport(0, 0, ww, hh); r.setClearColor(0x000000);
+  { const gq = gyroDelta(); if (gq) cam.quaternion.multiply(gq); }
   r.render(WD.scene, cam);
+  drawCities(cam);
   drawFlare(cam);
   const lab = dive.phase !== "emerge";
   WD.mA.visible = WD.mB.visible = WD.route.visible = lab;
@@ -2015,7 +2071,11 @@ $("dSpd").onclick = () => { if (!dive) return; dive.speed = dive.speed === 1 ? 3
   const dcv = $("dc");
   const zoomK = k => { if (dive) dive.camK = Math.max(0.25, Math.min(2.2, k)); };
   dcv.addEventListener("wheel", e => { if (dive && dive.phase === "flight") zoomK(dive.camK*(1 + e.deltaY*0.001)); }, { passive: true });
+  let lastTap = 0;
   dcv.addEventListener("pointerdown", e => {
+    const tn = performance.now();                       // double tap : recentrer le gyroscope
+    if (tn - lastTap < 300 && dive) { dive.gref = null; toast("Vue recentrée"); }
+    lastTap = tn;
     last = [e.clientX, e.clientY]; dcv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
     if (pts.size === 2 && dive) { const [a, b] = [...pts.values()]; pd = Math.hypot(a[0] - b[0], a[1] - b[1]); k0 = dive.camK || 1; }
   });
