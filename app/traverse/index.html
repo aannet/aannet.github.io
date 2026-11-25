@@ -46,8 +46,12 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 #dLeg i{width:12px;height:12px;border-radius:3px;display:inline-block}
 #dBtns{position:absolute;left:12px;bottom:calc(env(safe-area-inset-bottom) + 12px);display:flex;gap:8px}
 #dBtns button{width:44px;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.4);background:rgba(0,0,0,.45);color:#fff;font:600 13px inherit;font-family:inherit}
-#dEnd{position:absolute;left:16px;right:16px;top:calc(env(safe-area-inset-top) + 150px);padding:16px;border-radius:12px;border:1px solid rgba(255,226,140,.5);background:rgba(5,10,16,.88);text-align:center;display:none}
+#dEnd{position:absolute;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 68px);padding:16px;border-radius:12px;border:1px solid rgba(255,226,140,.5);background:rgba(5,10,16,.88);text-align:center;display:none}
 #dEnd.on{display:block}
+#dEnd button+button{margin-left:8px}
+#wx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.wl{position:absolute;left:0;top:0;font-size:11px;color:#fff;text-shadow:0 0 6px #000,0 0 2px #000;pointer-events:none;white-space:nowrap;display:none}
+.wl::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:middle}
 #eN{font-size:24px;color:#fff}
 #eTxt{font-size:12px;line-height:1.6;color:#cfe6f0;margin-top:6px}
 #dEnd button{margin-top:12px;height:44px;padding:0 24px;border-radius:999px;border:1px solid #5ff3ff;background:rgba(95,243,255,.12);color:#fff;font:600 12px inherit;font-family:inherit;letter-spacing:.15em}
@@ -90,11 +94,13 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 
 <div id="dive">
   <canvas id="dc"></canvas>
+  <canvas id="wx"></canvas>
+  <div class="wl" id="wlA"></div><div class="wl" id="wlB"></div>
   <div id="dTop">
     <div id="dTo"></div>
     <div id="dDepth"></div>
     <div id="dLayer"></div>
-    <div id="dRow"><span><b>température</b><i id="dTemp"></i></span><span><b>vitesse</b><i id="dSpeed"></i></span><span><b>temps</b><i id="dTime"></i></span></div>
+    <div id="dRow"><span><b id="dL1">température</b><i id="dV1"></i></span><span><b id="dL2">vitesse</b><i id="dV2"></i></span><span><b id="dL3">temps</b><i id="dV3"></i></span></div>
   </div>
   <div id="dToast"></div>
   <div id="dFrame"><span>COUPE · ATLAS</span></div>
@@ -103,8 +109,9 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
   <div id="dEnd">
     <div id="eN"></div>
     <div id="eTxt"></div>
-    <button id="eBack">REMONTER</button>
-    <small>Tunnel droit sans frottement dans une Terre de densité uniforme : en chute libre, la traversée dure environ 42 min, quelle que soit la destination.</small>
+    <button id="eFly">RENTRER EN AVION</button>
+    <button id="eBack">TERMINER</button>
+    <small id="eNote">Tunnel droit sans frottement dans une Terre de densité uniforme : en chute libre, la traversée dure environ 42 min, quelle que soit la destination.</small>
   </div>
 </div>
 
@@ -112,7 +119,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
   <h1>TRAVERSE</h1>
   <p>Ton téléphone devient une fenêtre à travers la Terre. Chaque capitale est affichée dans sa direction réelle, en ligne droite, sous tes pieds. Or : il y fait jour. Violet : crépuscule. Bleu, en croissant : il y fait nuit.</p>
   <button id="go">ENTRER</button>
-  <small>Accès à la position et à la boussole. Rien ne quitte ton téléphone. Glisser horizontalement pour recaler le nord, pincer pour zoomer, PLONGER pour traverser la Terre.</small>
+  <small>Accès à la position et à la boussole. Rien ne quitte ton téléphone. Glisser horizontalement pour recaler le nord, pincer pour zoomer, PLONGER pour traverser la Terre.<br>Images de la Terre : NASA Blue Marble. Météo : Open-Meteo.com.</small>
 </div>
 
 <script>
@@ -956,7 +963,11 @@ function setupDive(c) {
 function toast(t) { $("dToast").textContent = t; $("dToast").classList.add("on"); toastT = performance.now() + 2800; }
 async function startDive(c) {
   if (!c) return;
-  dive = { c, u: 0, speed: 1, paused: false, done: false, ready: false, yaw: 0, pitch: 0, layer: -1 };
+  dive = { c, u: 0, speed: 1, paused: false, done: false, ready: false, yaw: 0, pitch: 0, layer: -1, phase: "tunnel" };
+  dive.wxP = fetchWeather(c).then(w => { if (dive && dive.c === c) dive.wx = w; return w; });
+  $("dL1").textContent = "température"; $("dL2").textContent = "vitesse"; $("dL3").textContent = "temps";
+  $("dLeg").style.display = ""; $("dFrame").style.display = ""; $("dDepth").style.fontSize = "";
+  $("wlA").style.display = $("wlB").style.display = "none";
   dLast = performance.now();
   $("dTo").textContent = "VERS " + c.n.toUpperCase() + " · " + c.c.toUpperCase();
   $("dDepth").textContent = ""; $("dLayer").textContent = "Chargement du moteur 3D…"; $("dLayer").style.color = "#9fc6d4";
@@ -967,12 +978,14 @@ async function startDive(c) {
   if (!dive) return;
   if (!G) initGL();
   setupDive(c);
+  loadWorld().catch(() => {});
   toast("Glisse pour regarder les parois");
 }
-function endDive() { dive = null; $("dive").classList.remove("on"); lastFocus = undefined; }
+function endDive() { dive = null; $("dive").classList.remove("on"); lastFocus = undefined; precip(false); $("dToast").classList.remove("on"); }
 function diveFrame() {
   const now = performance.now(), dt = Math.min(0.05, (now - dLast)/1000); dLast = now;
   if (!dive.ready) return;
+  if (dive.phase !== "tunnel") { worldFrame(now, dt); return; }
   if (!dive.paused && dive.u < 1) dive.u = Math.min(1, dive.u + dt/DIVE_S*dive.speed);
   const c = dive.c, u = dive.u, half = c.chord/2;
   const x = half*Math.cos(Math.PI*u);
@@ -1011,17 +1024,295 @@ function diveFrame() {
   if (toastT && now > toastT) { $("dToast").classList.remove("on"); toastT = 0; }
   $("dDepth").textContent = fmt(depth) + " km";
   $("dLayer").textContent = lay[0].toUpperCase(); $("dLayer").style.color = lay[2];
-  $("dTemp").textContent = "≈ " + fmt(tempAt(depth)) + " °C";
-  $("dSpeed").textContent = fmt(kmh) + " km/h";
-  $("dTime").textContent = "T+ " + Math.round(u*T_HALF) + " min";
-  if (u >= 1 && !dive.done) {
-    dive.done = true;
-    $("eN").textContent = "Arrivée à " + c.n;
-    $("eTxt").textContent = fmt(c.chord) + " km en ligne droite en 42 min, au lieu de " + flight(c.km) + " de vol. " +
-      "Là-bas : " + (localTime(c) || fmtH(c.solar)) + ", " + sunState(c.sunEl).toLowerCase() + ". Point le plus profond : " + fmt(RT*(1 - Math.cos(c.ang/2))) + " km.";
-    $("dEnd").classList.add("on");
-  }
+  $("dV1").textContent = "≈ " + fmt(tempAt(depth)) + " °C";
+  $("dV2").textContent = fmt(kmh) + " km/h";
+  $("dV3").textContent = "T+ " + Math.round(u*T_HALF) + " min";
+  if (u >= 1 && !dive.done) { dive.done = true; startWorld(); }
 }
+
+// ---------- Sortie du tunnel : remontée sous le vrai ciel, météo réelle, vue orbitale, retour en avion
+const WMO = c => c === 0 ? "ciel dégagé" : c <= 2 ? "peu nuageux" : c === 3 ? "ciel couvert" : c <= 48 ? "brouillard" : c <= 57 ? "bruine" : c <= 67 ? "pluie" : c <= 77 ? "neige" : c <= 82 ? "averses" : c <= 86 ? "averses de neige" : "orage";
+function fetchWeather(c) {
+  const u = "https://api.open-meteo.com/v1/forecast?latitude=" + c.lat.toFixed(2) + "&longitude=" + c.lon.toFixed(2) +
+    "&current=temperature_2m,weather_code,cloud_cover,precipitation,wind_speed_10m";
+  return fetch(u).then(r => r.ok ? r.json() : null).then(j => j && j.current ? j.current : null).catch(() => null);
+}
+function subsolar(ms) {
+  const d = ms/86400000 + 2440587.5 - 2451545.0;
+  const g = (357.529 + 0.98560028*d)*D, q = 280.459 + 0.98564736*d;
+  const L = (q + 1.915*Math.sin(g) + 0.020*Math.sin(2*g))*D, e = (23.439 - 0.00000036*d)*D;
+  const ra = Math.atan2(Math.cos(e)*Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e)*Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908*d) % 24 + 24) % 24;
+  return [dec/D, (((ra/D - gmst*15) % 360) + 540) % 360 - 180];
+}
+const ease = t => t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2;
+const fmtDur = h => { const m = Math.round(h*60); return Math.floor(m/60) + " h " + String(m % 60).padStart(2, "0"); };
+const GV = `varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+void main(){ vUv = uv; vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; vN = normalize(w.xyz); gl_Position = projectionMatrix*viewMatrix*w; }`;
+const GF = `uniform sampler2D uDay; uniform sampler2D uNight; uniform sampler2D uNrm; uniform sampler2D uSpec; uniform vec3 uSun; uniform vec3 uCam;
+varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+void main(){
+  vec3 N = normalize(vN);
+  vec3 E = normalize(cross(vec3(0.0,0.0,1.0), N) + vec3(1e-5,0.0,0.0)); vec3 Nn = cross(N, E);
+  vec3 t = texture2D(uNrm, vUv).xyz*2.0 - 1.0;
+  vec3 n = normalize(E*t.x*1.8 + Nn*t.y*1.8 + N*max(t.z, 0.2));
+  float mu = dot(N, uSun);
+  vec3 day = texture2D(uDay, vUv).rgb*(0.06 + 1.2*max(dot(n, uSun), 0.0));
+  vec3 V = normalize(uCam - vW), H = normalize(uSun + V);
+  day += texture2D(uSpec, vUv).r*pow(max(dot(N, H), 0.0), 60.0)*0.6*vec3(1.0,0.9,0.75)*smoothstep(0.0, 0.1, mu);
+  vec3 nt = texture2D(uNight, vUv).rgb;
+  vec3 night = nt*nt*2.4*vec3(1.0,0.8,0.5) + vec3(0.005,0.008,0.018);
+  vec3 col = mix(night, day, smoothstep(-0.08, 0.12, mu));
+  col += vec3(1.0,0.4,0.15)*exp(-pow(mu/0.06, 2.0))*0.1;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+const CF = `uniform sampler2D uC; uniform vec3 uSun; uniform float uRot; uniform float uK;
+varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+void main(){
+  float a = texture2D(uC, vec2(vUv.x + uRot, vUv.y)).r;
+  float l = smoothstep(-0.1, 0.2, dot(normalize(vN), uSun));
+  gl_FragColor = vec4(vec3(0.05 + 0.95*l), min(1.0, a*uK));
+}`;
+const AF = `uniform vec3 uSun; uniform vec3 uCam; varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+void main(){
+  vec3 N = normalize(vN), V = normalize(uCam - vW);
+  float f = pow(1.0 - abs(dot(N, V)), 4.0);
+  gl_FragColor = vec4(vec3(0.35,0.62,1.0)*f*(0.06 + 1.1*smoothstep(-0.35, 0.3, dot(N, uSun))), 1.0);
+}`;
+const SF = `uniform vec3 uSun; uniform vec3 uCam; uniform float uA; uniform float uCloud; varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+void main(){
+  vec3 d = normalize(vW - uCam), up = normalize(uCam);
+  float h = dot(d, up), se = dot(up, uSun), sd = max(dot(d, uSun), 0.0);
+  float dayK = smoothstep(-0.15, 0.2, se);
+  vec3 zen = mix(vec3(0.01,0.015,0.04), vec3(0.12,0.35,0.8), dayK);
+  vec3 hor = mix(vec3(0.03,0.04,0.08), vec3(0.62,0.76,0.92), dayK);
+  vec3 c = mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.5));
+  c += vec3(1.0,0.42,0.15)*exp(-pow(se/0.12, 2.0))*pow(sd, 4.0)*(1.0 - clamp(h*2.0, 0.0, 1.0));
+  c = mix(c, vec3(0.5,0.53,0.57)*(0.12 + 0.88*dayK), uCloud*0.85);
+  c += vec3(1.0,0.95,0.85)*pow(sd, 900.0)*(1.0 - uCloud)*smoothstep(-0.02, 0.02, se)*3.0;
+  gl_FragColor = vec4(c, uA);
+}`;
+const FLIGHT_S = 45, ROUTE_N = 256;
+let WD = null, WP = null, countries = null;
+const loadWorld = () => WP || (WP = initWorld());
+async function initWorld() {
+  const T = await loadThree();
+  const ld = new T.TextureLoader();
+  const load = n => new Promise((res, rej) => ld.load(n, t => { t.colorSpace = T.NoColorSpace; t.anisotropy = 8; res(t); }, undefined, rej));
+  const [day, night, nrm, spec, clouds] = await Promise.all(["earth_atmos_2048.jpg", "earth_lights_2048.png", "earth_normal_2048.jpg", "earth_specular_2048.jpg", "earth_clouds_1024.jpg"].map(load));
+  clouds.wrapS = T.RepeatWrapping;
+  const scene = new T.Scene(), cam = new T.PerspectiveCamera(55, 1, 0.005, 6000);
+  const uSun = { value: new T.Vector3(1, 0, 0) }, uCam = { value: new T.Vector3() };
+  const globe = new T.Mesh(new T.SphereGeometry(SR, 256, 128), new T.ShaderMaterial({ uniforms: { uDay: { value: day }, uNight: { value: night }, uNrm: { value: nrm }, uSpec: { value: spec }, uSun, uCam }, vertexShader: GV, fragmentShader: GF }));
+  globe.rotation.x = Math.PI/2; scene.add(globe);
+  const cMat = new T.ShaderMaterial({ uniforms: { uC: { value: clouds }, uSun, uRot: { value: 0 }, uK: { value: 1.25 } }, vertexShader: GV, fragmentShader: CF, transparent: true, depthWrite: false, side: T.DoubleSide });
+  const cl = new T.Mesh(new T.SphereGeometry(SR*1.006, 128, 64), cMat); cl.rotation.x = Math.PI/2; scene.add(cl);
+  scene.add(new T.Mesh(new T.SphereGeometry(SR*1.035, 96, 48), new T.ShaderMaterial({ uniforms: { uSun, uCam }, vertexShader: GV, fragmentShader: AF, side: T.BackSide, transparent: true, blending: T.AdditiveBlending, depthWrite: false })));
+  const sp = new Float32Array(3000*3);
+  for (let i = 0; i < 3000; i++) { const v = norm([Math.random()*2 - 1, Math.random()*2 - 1, Math.random()*2 - 1]); sp.set([v[0]*2500, v[1]*2500, v[2]*2500], i*3); }
+  const sg = new T.BufferGeometry(); sg.setAttribute("position", new T.BufferAttribute(sp, 3));
+  scene.add(new T.Points(sg, new T.PointsMaterial({ color: 0xffffff, size: 1.5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false })));
+  const skyMat = new T.ShaderMaterial({ uniforms: { uSun, uCam, uA: { value: 1 }, uCloud: { value: 0 } }, vertexShader: GV, fragmentShader: SF, side: T.BackSide, transparent: true, depthWrite: false });
+  const sky = new T.Mesh(new T.SphereGeometry(40, 48, 24), skyMat); sky.frustumCulled = false; scene.add(sky);
+  const glowTex = new T.CanvasTexture(glowTexture());
+  const mark = col => { const s = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: col, transparent: true, blending: T.AdditiveBlending, depthWrite: false })); s.scale.set(5, 5, 1); scene.add(s); return s; };
+  const mA = mark(0xffe28c), mB = mark(0x5ff3ff);
+  const chord = new T.Line(new T.BufferGeometry(), new T.LineDashedMaterial({ color: 0x5ff3ff, dashSize: 2, gapSize: 1.5, transparent: true, opacity: 0.85, depthTest: false }));
+  chord.renderOrder = 5; scene.add(chord);
+  const route = new T.Line(new T.BufferGeometry(), new T.LineDashedMaterial({ color: 0xffe28c, dashSize: 1, gapSize: 1, transparent: true, opacity: 0.55 }));
+  const flown = new T.Line(new T.BufferGeometry(), new T.LineBasicMaterial({ color: 0xffffff }));
+  scene.add(route, flown);
+  // avion stylisé, nez vers +z
+  const plane = new T.Group(), pm = new T.MeshLambertMaterial({ color: 0xf2f4f7 }), am = new T.MeshLambertMaterial({ color: 0x5ff3ff });
+  const add3 = (geo, mat, rx, x, y, z) => { const m = new T.Mesh(geo, mat); m.rotation.x = rx; m.position.set(x, y, z); plane.add(m); };
+  add3(new T.CylinderGeometry(0.05, 0.035, 0.9, 12), pm, Math.PI/2, 0, 0, 0);
+  add3(new T.ConeGeometry(0.05, 0.14, 12), pm, Math.PI/2, 0, 0, 0.52);
+  add3(new T.BoxGeometry(0.95, 0.014, 0.17), pm, 0, 0, 0, 0.06);
+  add3(new T.BoxGeometry(0.32, 0.012, 0.08), pm, 0, 0, 0, -0.4);
+  add3(new T.BoxGeometry(0.012, 0.15, 0.1), am, 0, 0, 0.075, -0.4);
+  plane.scale.setScalar(4); plane.visible = false; scene.add(plane);
+  const sunL = new T.DirectionalLight(0xffffff, 2.2); scene.add(sunL, new T.AmbientLight(0xffffff, 0.45));
+  WD = { scene, cam, uSun, uCam, cMat, skyMat, sky, mA, mB, chord, route, flown, plane, sunL };
+  return WD;
+}
+function slerpU(a, b, t) {
+  const T = T3, om = Math.acos(Math.max(-1, Math.min(1, a.dot(b))));
+  if (om < 1e-6) return a.clone();
+  if (om > Math.PI - 1e-3) { const ax = new T.Vector3().crossVectors(a, Math.abs(a.z) < 0.9 ? new T.Vector3(0, 0, 1) : new T.Vector3(1, 0, 0)).normalize(); return a.clone().applyAxisAngle(ax, t*om); }
+  return a.clone().multiplyScalar(Math.sin((1 - t)*om)/Math.sin(om)).addScaledVector(b, Math.sin(t*om)/Math.sin(om));
+}
+async function startWorld() {
+  $("dLayer").textContent = "REMONTÉE…";
+  try { await loadWorld(); } catch (_) { showArrival(); return; }
+  if (!dive) return;
+  const T = T3, c = dive.c;
+  const C = new T.Vector3(...c.p).normalize(), B = new T.Vector3(...me.p0).normalize();
+  let f0 = B.clone().addScaledVector(C, -B.dot(C)); if (f0.lengthSq() < 1e-6) f0 = new T.Vector3(0, 0, 1).addScaledVector(C, -C.z); f0.normalize();
+  let mid = C.clone().add(B); if (mid.lengthSq() < 0.09) mid = new T.Vector3().crossVectors(C, f0); mid.normalize();
+  const pts = []; for (let i = 0; i <= ROUTE_N; i++) pts.push(slerpU(C, B, i/ROUTE_N).multiplyScalar(SR*1.004));
+  WD.route.geometry.dispose(); WD.route.geometry = new T.BufferGeometry().setFromPoints(pts); WD.route.computeLineDistances();
+  WD.flown.geometry.dispose(); WD.flown.geometry = new T.BufferGeometry().setFromPoints(pts); WD.flown.geometry.setDrawRange(0, 0);
+  WD.chord.geometry.dispose(); WD.chord.geometry = new T.BufferGeometry().setFromPoints([C.clone().multiplyScalar(SR), B.clone().multiplyScalar(SR)]); WD.chord.computeLineDistances();
+  WD.mA.position.copy(C).multiplyScalar(SR*1.002); WD.mB.position.copy(B).multiplyScalar(SR*1.002);
+  WD.plane.visible = false;
+  dive.world = { C, B, f0, orbitDir: mid.clone().addScaledVector(new T.Vector3(0, 0, 1), 0.25).normalize(), t0: Date.now() };
+  dive.phase = "emerge"; dive.wt = 0; dive.yaw = 0;
+  $("dLeg").style.display = "none"; $("dFrame").style.display = "none";
+  $("wlA").textContent = c.n; $("wlA").style.color = "#ffe28c";
+  $("wlB").textContent = me.here ? me.here.n : "Toi"; $("wlB").style.color = "#5ff3ff";
+  $("dL1").textContent = "heure locale"; $("dL2").textContent = "météo"; $("dL3").textContent = "température";
+}
+function showArrival() {
+  const c = dive.c, w = dive.wx;
+  dive.phase = "arrived";
+  $("eN").textContent = "Arrivée à " + c.n;
+  $("eTxt").textContent = fmt(c.chord) + " km en ligne droite en 42 min, au lieu de " + flight(c.km) + " de vol. Là-bas : " +
+    (localTime(c) || fmtH(c.solar)) + ", " + sunState(c.sunEl).toLowerCase() + ". " +
+    (w ? "Météo : " + WMO(w.weather_code) + ", " + Math.round(w.temperature_2m) + " °C, vent " + Math.round(w.wind_speed_10m) + " km/h (Open-Meteo)." : "Météo indisponible.");
+  $("eFly").style.display = WD ? "" : "none"; $("eNote").style.display = "";
+  $("dEnd").classList.add("on");
+}
+function startFlight() {
+  if (!dive || !WD) return;
+  dive.phase = "flight"; dive.wt = 0; dive.yaw = 0; dive.speed = 1; dive.paused = false; dive.flDone = false;
+  dive.durH = dive.c.km/850 + 0.5; dive.region = ""; dive.regT = 0;
+  $("dSpd").textContent = "1×"; $("dPause").textContent = "❚❚";
+  $("dEnd").classList.remove("on");
+  $("dTo").textContent = "VOL RETOUR · " + dive.c.n.toUpperCase() + " → " + (me.here ? me.here.n.toUpperCase() : "TOI");
+  $("dLayer").textContent = "11 000 m · 850 km/h"; $("dLayer").style.color = "#9fc6d4"; $("dDepth").style.fontSize = "30px";
+  $("dL1").textContent = "temps de vol"; $("dL2").textContent = "reste"; $("dL3").textContent = "heure à " + (me.here ? me.here.n : "l'arrivée");
+  WD.plane.visible = true;
+  toast("Glisse pour tourner autour de l'avion");
+  if (!countries) fetch("countries.json").then(r => r.json()).then(j => {
+    countries = j.map(k => ({ n: k.n, b: k.b, rr: k.r.map(r => { let x = 0, y = 0; return r.split(" ").map(q => { const [a, b] = q.split(","); x += +a; y += +b; return [x/10, y/10]; }); }) }));
+  }).catch(() => {});
+}
+function oceanName(la, lo) {
+  if (la > 66) return "Océan Arctique";
+  if (la < -58) return "Océan Austral";
+  if (la > 30 && la < 46 && lo > -6 && lo < 37) return "Mer Méditerranée";
+  if (lo > 20 && lo < 120 && la < 30 && (lo > 45 || la < 10)) return "Océan Indien";
+  if ((la >= 0 && lo > -100 && lo < -5) || (la < 0 && lo > -70 && lo < 20)) return "Océan Atlantique";
+  return "Océan Pacifique";
+}
+function regionAt(la, lo) {
+  if (countries) for (const k of countries) {
+    if (lo < k.b[0] || lo > k.b[2] || la < k.b[1] || la > k.b[3]) continue;
+    let ins = false;
+    for (const r of k.rr) for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const [xi, yi] = r[i], [xj, yj] = r[j];
+      if ((yi > la) !== (yj > la) && lo < (xj - xi)*(la - yi)/(yj - yi) + xi) ins = !ins;
+    }
+    if (ins) return k.n;
+  }
+  return oceanName(la, lo);
+}
+const wxc = $("wx"), wxg = wxc.getContext("2d");
+const drops = Array.from({ length: 160 }, () => [Math.random(), Math.random(), 0.6 + Math.random()*0.8]);
+function precip(on, snow, dt) {
+  const w = innerWidth, h = innerHeight;
+  if (wxc.width !== w) { wxc.width = w; wxc.height = h; }
+  wxg.clearRect(0, 0, w, h);
+  if (!on) return;
+  wxg.strokeStyle = snow ? "rgba(255,255,255,.85)" : "rgba(180,210,255,.5)"; wxg.lineWidth = snow ? 2.5 : 1; wxg.lineCap = "round";
+  wxg.beginPath();
+  for (const d of drops) {
+    d[1] += dt*(snow ? 0.15 : 1.4)*d[2]; if (d[1] > 1) { d[1] -= 1; d[0] = Math.random(); }
+    const x = d[0]*w + (snow ? Math.sin(d[1]*20 + d[2]*9)*8 : 0), y = d[1]*h;
+    wxg.moveTo(x, y); wxg.lineTo(x - (snow ? 0 : 3), y - (snow ? 1 : 22*d[2]));
+  }
+  wxg.stroke();
+}
+function placeLabel(el, v) {
+  const T = T3, cam = WD.cam, p = v.clone().multiplyScalar(SR*1.002);
+  const facing = p.clone().normalize().dot(cam.position.clone().sub(p).normalize()) > 0.02;
+  const s = p.clone().project(cam);
+  if (!facing || s.z > 1 || Math.abs(s.x) > 1.1 || Math.abs(s.y) > 1.1) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.style.transform = `translate(${(s.x + 1)/2*innerWidth - 3}px, ${(1 - s.y)/2*innerHeight - 8}px)`;
+}
+function worldFrame(now, dt) {
+  const T = T3, w = dive.world, cam = WD.cam, r = G.r, c = dive.c;
+  if (!dive.paused) dive.wt += dt*(dive.phase === "flight" ? dive.speed : 1);
+  let simMs = Date.now(), alt = 0;
+  const cloud = dive.wx ? dive.wx.cloud_cover/100 : 0.3;
+  if (dive.phase === "emerge" || dive.phase === "orbit" || dive.phase === "arrived") {
+    const te = Math.min(1, dive.wt/7);
+    const altE = 0.015 + 13*te*te*te, pitch = (12 - 70*ease(te))*D;
+    const pe = w.C.clone().multiplyScalar(SR + altE);
+    const le = pe.clone().add(w.f0.clone().multiplyScalar(Math.cos(pitch)).addScaledVector(w.C, Math.sin(pitch)));
+    if (dive.wt < 7) { cam.position.copy(pe); cam.up.copy(w.C); cam.lookAt(le); }
+    else {
+      if (dive.phase === "emerge") dive.phase = "orbit";
+      const k = ease(Math.min(1, (dive.wt - 7)/4.5));
+      const dir = slerpU(w.C, w.orbitDir, k), rad = (SR + altE) + (SR*3.3 - SR - altE)*k;
+      cam.position.copy(dir).multiplyScalar(rad);
+      cam.up.copy(w.C).lerp(new T.Vector3(0, 0, 1), k).normalize();
+      cam.lookAt(le.clone().lerp(new T.Vector3(), k));
+      if (k >= 1 && dive.phase === "orbit") showArrival();
+    }
+    alt = cam.position.length() - SR;
+    const wx = dive.wx;
+    $("dTo").textContent = "SORTIE · " + c.n.toUpperCase();
+    $("dDepth").textContent = fmt(alt/SR*RT) + " km";
+    $("dLayer").textContent = alt < 1.6 ? "SOUS LE CIEL DE " + c.n.toUpperCase() : "ALTITUDE"; $("dLayer").style.color = "#bff9ff";
+    $("dV1").textContent = localTime(c) || fmtH(c.solar);
+    $("dV2").textContent = wx ? WMO(wx.weather_code) : "…";
+    $("dV3").textContent = wx ? Math.round(wx.temperature_2m) + " °C" : "…";
+    const code = wx ? wx.weather_code : 0;
+    precip(wx && alt < 0.25 && ((code >= 51 && code <= 67) || code >= 71), code >= 71 && code <= 86, dt);
+  } else {
+    precip(false);
+    const p = Math.min(1, dive.wt/FLIGHT_S);
+    const q = slerpU(w.C, w.B, p), q2 = p < 0.998 ? slerpU(w.C, w.B, p + 0.002) : null;
+    const fwd = q2 ? q2.sub(q) : q.clone().sub(slerpU(w.C, w.B, p - 0.002));
+    const up = q.clone(); fwd.addScaledVector(up, -fwd.dot(up)).normalize();
+    const right = new T.Vector3().crossVectors(up, fwd);
+    const pos = q.clone().multiplyScalar(SR + 0.25);
+    WD.plane.position.copy(pos);
+    WD.plane.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(right, up, fwd));
+    const off = fwd.clone().multiplyScalar(-15).addScaledVector(up, 9).applyAxisAngle(up, dive.yaw);
+    cam.position.copy(pos).add(off); cam.up.copy(up); cam.lookAt(pos.clone().addScaledVector(fwd, 9));
+    WD.flown.geometry.setDrawRange(0, Math.max(0, Math.floor(p*ROUTE_N) + 1));
+    simMs = w.t0 + p*dive.durH*3600000;
+    alt = cam.position.length() - SR;
+    if (now > dive.regT) { const la = Math.asin(q.z)/D, lo = Math.atan2(q.y, q.x)/D; dive.region = regionAt(la, lo); dive.regT = now + 300; }
+    $("dDepth").textContent = dive.region;
+    $("dV1").textContent = fmtDur(p*dive.durH) + " / " + fmtDur(dive.durH);
+    $("dV2").textContent = fmt((1 - p)*c.km) + " km";
+    $("dV3").textContent = new Date(simMs).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    if (p >= 1 && !dive.flDone) {
+      dive.flDone = true;
+      $("eN").textContent = "Atterrissage" + (me.here ? " à " + me.here.n : "");
+      $("eTxt").textContent = fmt(c.km) + " km en " + fmtDur(dive.durH) + " de vol, contre 42 min par le tunnel. Il est " +
+        new Date(simMs).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) + " à l'arrivée.";
+      $("eFly").style.display = "none"; $("eNote").style.display = "none";
+      $("dEnd").classList.add("on");
+    }
+  }
+  // soleil (avance avec le temps simulé pendant le vol), nuages, ciel
+  const [sla, slo] = subsolar(simMs);
+  WD.uSun.value.set(...ecef(sla, slo));
+  WD.sunL.position.copy(WD.uSun.value).multiplyScalar(1000);
+  WD.uCam.value.copy(cam.position);
+  WD.cMat.uniforms.uRot.value = (simMs/3.6e6)*0.0008 % 1;
+  WD.sky.position.copy(cam.position);
+  WD.skyMat.uniforms.uA.value = 1 - Math.min(1, Math.max(0, (alt - 0.4)/2.2));
+  WD.skyMat.uniforms.uCloud.value = cloud;
+  const nearV = alt < 1 ? 0.005 : 0.05;
+  if (cam.near !== nearV) { cam.near = nearV; cam.updateProjectionMatrix(); }
+  const ww = innerWidth, hh = innerHeight;
+  if (ww !== G.w || hh !== G.h) { G.w = ww; G.h = hh; r.setSize(ww, hh, false); }
+  if (cam.aspect !== ww/hh) { cam.aspect = ww/hh; cam.updateProjectionMatrix(); }
+  r.setScissorTest(false); r.setViewport(0, 0, ww, hh); r.setClearColor(0x000000);
+  r.render(WD.scene, cam);
+  const lab = dive.phase !== "emerge";
+  WD.mA.visible = WD.mB.visible = WD.route.visible = lab;
+  WD.chord.visible = lab && dive.phase !== "flight";
+  if (lab) { placeLabel($("wlA"), w.C); placeLabel($("wlB"), w.B); } else $("wlA").style.display = $("wlB").style.display = "none";
+  if (toastT && now > toastT) { $("dToast").classList.remove("on"); toastT = 0; }
+}
+$("eFly").onclick = startFlight;
 $("bDive").onclick = () => { if (!$("bDive").disabled) startDive(lastFocus); };
 function antipodeTarget() {
   const la = -me.lat, lo = me.lon > 0 ? me.lon - 180 : me.lon + 180;
@@ -1042,7 +1333,7 @@ $("dSpd").onclick = () => { if (!dive) return; dive.speed = dive.speed === 1 ? 3
   dcv.addEventListener("pointerdown", e => { last = [e.clientX, e.clientY]; dcv.setPointerCapture(e.pointerId); });
   dcv.addEventListener("pointermove", e => {
     if (!last || !dive) return;
-    dive.yaw = Math.max(-1.4, Math.min(1.4, dive.yaw - (e.clientX - last[0])*0.005));
+    dive.yaw = dive.phase === "flight" ? dive.yaw - (e.clientX - last[0])*0.006 : Math.max(-1.4, Math.min(1.4, dive.yaw - (e.clientX - last[0])*0.005));
     dive.pitch = Math.max(-1.2, Math.min(1.2, dive.pitch - (e.clientY - last[1])*0.005));
     last = [e.clientX, e.clientY];
   });
