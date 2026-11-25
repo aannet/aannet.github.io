@@ -1259,7 +1259,7 @@ function makeAirliner(T, glowTex) {
   }
   const [vg, vm] = surf([[0.34, 0.045], [0.47, 0.24], [0.515, 0.24], [0.5, 0.045]], 0.008, navy);   // dérive
   vg.rotateY(Math.PI/2); vg.translate(-0.004, 0, 0);
-  const vf = new T.Mesh(vg, vm); vf.scale.z = -1; g.add(vf);
+  const vf = new T.Mesh(vg, vm); g.add(vf);   // la rotation place déjà la dérive à l'arrière (z négatif)
   // feux de navigation : rouge à gauche, vert à droite, flash blanc, anticollision rouge
   const lamp = (col, px, py, pz, s) => { const sp = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: col, transparent: true, blending: T.AdditiveBlending, depthWrite: false })); sp.position.set(px, py, pz); sp.scale.setScalar(s); g.add(sp); return sp; };
   const red = lamp(0xff3030, -0.535, 0.03, -0.16, 0.06), green = lamp(0x30ff60, 0.535, 0.03, -0.16, 0.06);
