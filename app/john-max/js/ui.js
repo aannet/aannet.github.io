@@ -86,19 +86,14 @@ export function buildGui(GUI, game) {
   c.add(CFG, 'shakeDecay', 0.5, 8, 0.1).name('amortissement');
   c.add(CFG, 'camPunch', 0, 0.3, 0.01).name('punch zoom');
 
-  const k = f('Impact & ragdoll');
+  const k = f('Impact');
   k.add(CFG, 'knockLight', 0, 6, 0.1).name('recul coup léger');
   k.add(CFG, 'knockHeavy', 0, 20, 0.1).name('impulsion coup fort');
   k.add(CFG, 'knockUp', 0, 10, 0.1).name('impulsion verticale');
   k.add(CFG, 'batMult', 1, 4, 0.1).name('multiplicateur batte');
   k.add(CFG, 'groundDrag', 0, 15, 0.5).name('frottement au sol');
   k.add(CFG, 'gravity', 5, 25, 0.5).name('gravité').onChange((v) => { game.world.gravity = { x: 0, y: -v, z: 0 }; });
-  k.add(CFG, 'ragdoll').name('ragdoll (sinon chutes animées)');
-  k.add(CFG, 'ragdollDelay', 0, 0.25, 0.005).name('délai avant ragdoll (s)');
-  k.add(CFG, 'ragdollParts', { '7 corps (boîte)': 7, '11 corps': 11 }).name('ragdoll');
-  k.add(CFG, 'jointFriction', 0, 2, 0.05).name('raideur des joints');
-  k.add(CFG, 'angDamp', 0, 3, 0.05).name('amorti angulaire');
-  k.add(CFG, 'ragdollBowling').name('ragdoll renverse les autres');
+  k.add(CFG, 'bowling').name('un projeté renverse les autres');
   k.add(CFG, 'flashTime', 0, 0.2, 0.005).name('flash (s)');
   k.add(CFG, 'particles', 0, 3, 0.1).name('quantité de particules');
 

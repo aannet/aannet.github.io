@@ -99,13 +99,13 @@ async function boot() {
     game.level.update(camX.v, game.time.real, dt);
   }
 
-  // « Bowling » : un ennemi projeté (ragdoll ou chute animée) renverse ceux qu'il percute
+  // « Bowling » : un ennemi projeté renverse ceux qu'il percute
   const _bp = new THREE.Vector3();
   function bowlHit(a, b, p, v) {
     a.bowled.add(b);
     b.hp -= 12 * CFG.damageMult;
     const ko = b.hp <= 0;
-    b.heavyHit({ x: v.x * 0.75, y: Math.max(2.5, v.y * 0.4 + 2.5), z: (v.z || 0) * 0.5, spin: -Math.sign(v.x) * 4 });
+    b.heavyHit({ x: v.x * 0.75, y: Math.max(2.5, v.y * 0.4 + 2.5) });
     game.juice.flash(b.rig);
     game.juice.shake(CFG.shakeHeavy * 0.8);
     game.juice.hit(_bp.set(p.x, p.y, p.z), Math.sign(v.x), 1, b.headPos(new THREE.Vector3()));
@@ -115,12 +115,10 @@ async function boot() {
     if (ko) game.onKO(b);
   }
   function bowling() {
-    if (!CFG.ragdollBowling) return;
+    if (!CFG.bowling) return;
     for (const a of game.enemies) {
       const targets = (p) => game.enemies.filter((b) => b !== a && b.hittable() && !a.bowled.has(b) && Math.hypot(p.x - b.x, p.z - b.z) < 0.5 && p.y < 1.8);
-      if (a.ragdoll) {
-        a.ragdoll.forEachFast(4, (p, v) => { for (const b of targets(p)) bowlHit(a, b, p, v); });
-      } else if (a.state === 'knock' && Math.abs(a.vx) > 2.5) {
+      if (a.state === 'knock' && Math.abs(a.vx) > 2.5) {
         const p = { x: a.x + Math.sign(a.vx) * 0.3, y: a.y + 0.6, z: a.z };
         for (const b of targets(p)) bowlHit(a, b, p, { x: a.vx, y: a.vy });
       }
@@ -153,7 +151,6 @@ async function boot() {
     separate();
     world.timestep = gdt;
     world.step();
-    for (const e of game.enemies) if (e.ragdoll) e.ragdoll.sync();
     bowling();
     game.level.sync(gdt);
     game.bat.update(gdt);

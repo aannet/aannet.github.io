@@ -16,14 +16,12 @@ const ATK = { clip: 'Punch_Cross', active: [0.22, 0.34], end: 0.8 };
 
 export class Enemy extends Character {
   constructor(game, idx) {
-    super(game, LOOKS[idx % 3], { x: 3 + idx * 1.5, z: idx % 2 ? 0.6 : -0.6, facing: -1, hp: 60, ragIndex: idx });
+    super(game, LOOKS[idx % 3], { x: 3 + idx * 1.5, z: idx % 2 ? 0.6 : -0.6, facing: -1, hp: 60 });
     this.idx = idx;
     this.active = true;
     this.cooldown = 1 + idx * 0.8;
     this.ko = false;
-    this.calmT = 0;
     this.bowled = new Set();
-    this.launch = null;
     this.hitDir = 1;
     this.stunDur = 0.4;
     this.makeBar();
@@ -46,7 +44,7 @@ export class Enemy extends Character {
   }
 
   hittable() {
-    return this.active && !this.ragdoll && ['approach', 'attack', 'hitstun'].includes(this.state);
+    return this.active && ['approach', 'attack', 'hitstun'].includes(this.state);
   }
 
   // En l'air après un coup fort (chute animée) : on peut le rattraper (juggle)
@@ -70,16 +68,10 @@ export class Enemy extends Character {
 
   heavyHit(launch) {
     this.releaseToken();
-    this.launch = launch;
     this.hitDir = Math.sign(launch.x) || 1;
     this.facing = -this.hitDir;
     this.bowled.clear();
-    if (!CFG.ragdoll) return this.knock(launch.x, launch.y);
-    if (CFG.ragdollDelay <= 0 || launch.instant) this.goRagdoll(launch);
-    else {
-      this.anim('Hit_Knockback', { fade: 0.03, restart: true, speed: 1.4 });
-      this.setState('react');
-    }
+    this.knock(launch.x, launch.y);
   }
 
   // Chute animée : Hit_Knockback (finit sur le dos) + trajectoire balistique du root.
@@ -100,8 +92,6 @@ export class Enemy extends Character {
 
   respawn() {
     const hero = this.game.hero;
-    if (this.ragdoll) { this.ragdoll.dispose(); this.ragdoll = null; }
-    this.model.resetPose();
     this.y = this.vx = this.vy = 0;
     this.collider.setEnabled(true);
     this.hp = this.maxHp;
@@ -111,7 +101,6 @@ export class Enemy extends Character {
     this.z = (Math.random() - 0.5) * 2;
     this.facing = right ? -1 : 1;
     this.yaw = this.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
-    this.histReady = false;
     this.cooldown = 1;
     this.clip = null;
     this.setState('enter');
@@ -189,34 +178,6 @@ export class Enemy extends Character {
         if (this.t >= this.stunDur) { this.cooldown = Math.max(this.cooldown, 0.4); this.setState('approach'); }
         break;
       }
-      case 'react': {
-        // quelques frames d'animation lisible avant la bascule physique
-        this.x += this.hitDir * 1.2 * dt;
-        if (this.t >= CFG.ragdollDelay) {
-          this.clampArena();
-          this.step(dt);
-          this.goRagdoll(this.launch);
-          this.updateBar();
-          return;
-        }
-        break;
-      }
-      case 'ragdoll': {
-        this.ragdoll.groundDrag(dt);
-        this.ragdoll.sync();
-        this.thudCheck(dt);
-        if (this.ko) {
-          if (this.t > 3.5) this.respawn();
-        } else {
-          this.calmT = this.ragdoll.speed() < 0.45 ? this.calmT + dt : 0;
-          if ((this.calmT > 0.5 && this.t > 0.9) || this.t > 3.5) {
-            this.endRagdoll('LayToIdle');
-            this.setState('getup');
-          }
-        }
-        this.updateBar();
-        return;
-      }
       case 'knock': {
         const a = this.model.actions.Hit_Knockback;
         const air = this.y > 0;
@@ -257,18 +218,6 @@ export class Enemy extends Character {
     this.clampArena();
     this.step(dt, lean);
     this.updateBar();
-  }
-
-  thudCheck(dt) {
-    const rd = this.ragdoll;
-    rd.thudT -= dt;
-    const vy = rd.bodies.torso.linvel().y;
-    if (rd.prevVy < -3 && vy > -0.8 && rd.thudT <= 0) {
-      sfx.thud(-rd.prevVy / 8);
-      this.game.juice.shake(Math.min(0.25, -rd.prevVy * 0.025));
-      rd.thudT = 0.25;
-    }
-    rd.prevVy = vy;
   }
 
   updateBar() {

@@ -13,7 +13,8 @@
 
 | Asset | Source | Licence |
 |---|---|---|
-| `assets/title.jpg` (écran d'accueil John Max) | Fourni par Alec | Propriété du projet |
+| `assets/title.jpg`, `assets/icon-*.png` (écran d'accueil John Max, titre composé en CSS) | Fourni par Alec | Propriété du projet |
+| Polices Russo One, Oswald | Google Fonts | SIL OFL 1.1 |
 | `assets/chars/male.glb`, `female.glb`, `hair_*.glb` | Quaternius, Universal Base Characters (Standard) — https://quaternius.com/packs/universalbasecharacters.html | CC0 |
 | `assets/chars/anims_ual1.glb` | Quaternius, Universal Animation Library (Standard) — https://quaternius.com/packs/universalanimationlibrary.html | CC0 |
 | `assets/chars/anims_ual2.glb` | Quaternius, Universal Animation Library 2 (Standard) — https://quaternius.com/packs/universalanimationlibrary2.html | CC0 |

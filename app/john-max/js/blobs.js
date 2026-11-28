@@ -32,12 +32,7 @@ export class Blobs {
   update(game) {
     let i = 0;
     for (const ch of [game.hero, ...game.enemies]) {
-      if (ch.ragdoll) {
-        const t = ch.ragdoll.bodies.torso.translation();
-        this.set(i++, t.x, t.z, 1.1, Math.max(0, t.y - 0.3));
-      } else {
-        this.set(i++, ch.x, ch.z, 0.9, ch.y);
-      }
+      this.set(i++, ch.x, ch.z, 0.9, ch.y);
     }
     for (const p of game.level.props) {
       const t = p.body.translation();

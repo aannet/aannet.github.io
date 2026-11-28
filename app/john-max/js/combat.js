@@ -37,34 +37,23 @@ export function resolveHit(game, A, enemy, point) {
   game.ui.combo();
 
   if (A.launcher) {
-    enemy.heavyHit({ x: dir * CFG.upperX, y: CFG.upperUp, z: 0, spin: -dir * 3, instant: true, inherit: 0 });
+    enemy.heavyHit({ x: dir * CFG.upperX, y: CFG.upperUp });
   } else if (heavy) {
     const m = A.bat ? CFG.batMult : 1;
-    _l.set(dir * CFG.knockHeavy * m, CFG.knockUp * (A.bat ? 1.25 : 1) * (ko ? 1.15 : 1), (Math.random() - 0.5) * 1.6);
-    enemy.heavyHit({ x: _l.x, y: _l.y, z: _l.z, spin: -dir * 5 });
+    enemy.heavyHit({ x: dir * CFG.knockHeavy * m, y: CFG.knockUp * (A.bat ? 1.25 : 1) * (ko ? 1.15 : 1) });
   } else {
     enemy.lightHit(dir);
   }
   if (ko) game.onKO(enemy);
 }
 
-// Coup sur un ennemi déjà projeté (ragdoll ou chute animée) : en l'air on le maintient (juggle).
+// Coup sur un ennemi en l'air (chute animée) : on le relance (juggle).
 export function resolveJuggle(game, A, enemy, point) {
   const { juice, time, hero } = game;
   const m = A.bat ? CFG.batMult : 1;
-  if (enemy.ragdoll) {
-    const c = enemy.ragdoll.center(_l);
-    const dir = Math.sign(c.x - hero.x) || hero.facing;
-    let vel;
-    if (A.launcher) vel = { x: dir * CFG.upperX, y: CFG.upperUp * 0.85, z: 0 };
-    else if (c.y > 0.55) vel = { x: dir * CFG.juggleX * (A.heavy ? 2.5 * m : 1), y: CFG.juggleUp * (A.heavy ? 1.15 : 1), z: 0 };
-    else { const k = A.heavy ? 1 : 0.45; vel = { x: dir * CFG.knockHeavy * m * k, y: CFG.knockUp * (0.6 + k), z: (Math.random() - 0.5) * 1.2 }; }
-    enemy.ragdoll.hit(point, vel);
-  } else {
-    const dir = Math.sign(enemy.x - hero.x) || hero.facing;
-    if (A.launcher) enemy.juggle(dir * CFG.upperX, CFG.upperUp * 0.85);
-    else enemy.juggle(dir * CFG.juggleX * (A.heavy ? 2.5 * m : 1), CFG.juggleUp * (A.heavy ? 1.15 : 1));
-  }
+  const dir = Math.sign(enemy.x - hero.x) || hero.facing;
+  if (A.launcher) enemy.juggle(dir * CFG.upperX, CFG.upperUp * 0.85);
+  else enemy.juggle(dir * CFG.juggleX * (A.heavy ? 2.5 * m : 1), CFG.juggleUp * (A.heavy ? 1.15 : 1));
   enemy.t = 0; // relance le délai de relevé / respawn tant qu'on le garde en l'air
   if (!enemy.ko) {
     enemy.hp -= A.dmg * CFG.damageMult * 0.6;

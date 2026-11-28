@@ -21,7 +21,7 @@
 
 ## Panneau de réglages (⚙)
 
-Tout le game feel est réglable en direct : hitstop, shake, punch caméra, impulsions, délai avant ragdoll, ragdoll 7 ou 11 corps, raideur des joints, buffer d'input, slow-mo du dernier KO, durabilité de la batte. « Garder ces réglages » les stocke dans le navigateur, « Copier » les met en JSON dans le presse-papiers (à recoller dans `js/config.js` pour en faire les valeurs par défaut).
+Tout le game feel est réglable en direct : vitesse des animations, hitstop, shake, punch caméra, impulsions, frottement au sol, buffer d'input, slow-mo du dernier KO, durabilité de la batte. « Garder ces réglages » les stocke dans le navigateur, « Copier » les met en JSON dans le presse-papiers (à recoller dans `js/config.js` pour en faire les valeurs par défaut).
 
 ## Architecture
 
@@ -33,8 +33,7 @@ Tout le game feel est réglable en direct : hitstop, shake, punch caméra, impul
 | `assets.js` | Chargement des GLB (meshopt) et des clips |
 | `model.js` | Personnage riggé Quaternius : toon, contour skinné, liseré, habillage par sommet selon l'os dominant, AnimationMixer |
 | `toon.js` | Dégradé toon et contour des objets statiques |
-| `ragdoll.js` | Bascule animation → ragdoll sur le squelette 65 os, recopie pose et vélocité, mode 7 ou 11 corps |
-| `character.js` | Base héros/ennemis : capsule cinématique, pose, bascule |
+| `character.js` | Base héros/ennemis : modèle, clips, capsule cinématique, hauteur en l'air |
 | `hero.js` / `enemy.js` | Combo + buffer, IA à jeton d'attaque, états de réaction, choix des clips |
 | `combat.js` | Coups calés sur les clips (fenêtres en secondes de clip), résolution des coups, juggle |
 | `juice.js` / `audio.js` | Shake, punch, flash, étincelles, étoiles d'impact, sons synthétisés |
@@ -51,7 +50,7 @@ Tout le game feel est réglable en direct : hitstop, shake, punch caméra, impul
 - Rim light par patch du shader toon (un seul programme GPU) plutôt que des lumières en plus.
 - Pluie entièrement dans le vertex shader. Façade et détails peints dans une texture canvas.
 
-Coup fort : chute animée par défaut (`Hit_Knockback` + trajectoire balistique, puis `LayToIdle` qui s'enchaîne sans saut). Le ragdoll Rapier reste activable dans ⚙ > Impact. Un ennemi projeté renverse ceux qu'il percute (« bowling », désactivable).
+Coup fort : chute animée (`Hit_Knockback` + trajectoire balistique, puis `LayToIdle` qui s'enchaîne sans saut). Un ennemi projeté renverse ceux qu'il percute (« bowling », désactivable). Rapier ne sert plus qu'au décor physique (caisses, poubelles, batte).
 
 ## Personnages et animations
 

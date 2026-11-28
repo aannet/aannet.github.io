@@ -134,23 +134,6 @@ export class Hero extends Character {
     const pts = this.points(A);
     for (const e of this.game.enemies) {
       if (this.hitSet.has(e) || !e.active) continue;
-      if (e.ragdoll) {
-        // juggle d'un ennemi en l'air ou au sol
-        for (const p of pts) {
-          let hit = false;
-          for (const n of e.ragdoll.parts) {
-            const b = e.ragdoll.bodies[n].translation();
-            if (Math.hypot(b.x - p.x, b.y - p.y, b.z - p.z) < A.r + 0.32) { hit = true; break; }
-          }
-          if (hit) {
-            this.hitSet.add(e);
-            resolveJuggle(this.game, A, e, p);
-            if (A.bat && this.bat) this.bat.used();
-            break;
-          }
-        }
-        continue;
-      }
       const air = e.airborne();
       if (!air && !e.hittable()) continue;
       if ((e.x - this.x) * this.facing < -0.25) continue;

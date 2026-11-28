@@ -1,7 +1,7 @@
 // Tous les réglages de game feel, exposés dans le panneau de debug.
 export const CFG = {
   // Nervosité : vitesse de toutes les animations (1 = vitesse des clips)
-  animSpeed: 1.15,
+  animSpeed: 1.21,
 
   // Rendu : nombre de lignes à l'écran (0 = résolution native)
   renderLines: 360,
@@ -33,14 +33,8 @@ export const CFG = {
   groundDrag: 5,
   gravity: 13,
 
-  // Ragdoll (désactivé : chutes animées)
-  ragdoll: false,
-  ragdollDelay: 0.09,
-  ragdollParts: 7,
-  jointFriction: 0.25,
-  linDamp: 0.05,
-  angDamp: 0.6,
-  ragdollBowling: true,
+  // Chutes
+  bowling: true,
 
   // Uppercut & juggle
   upperUp: 5.8,
@@ -51,9 +45,9 @@ export const CFG = {
   // Combat
   inputBuffer: 0.25,
   damageMult: 1,
-  heroSpeed: 3.9,
+  heroSpeed: 4.1,
   heroInvincible: false,
-  enemySpeed: 1.95,
+  enemySpeed: 2.05,
   enemyAggro: 1,
 
   // Batte
@@ -65,7 +59,5 @@ export const G = {
   STATIC: 0x0001,
   PROPS: 0x0002,
   CHAR: 0x0004,
-  RAG0: 0x0008, // ragdoll i = RAG0 << i (i de 0 à 4)
-  ALLRAG: 0x00f8,
 };
 export const groups = (member, filter) => ((member & 0xffff) << 16) | (filter & 0xffff);

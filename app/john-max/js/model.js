@@ -101,8 +101,6 @@ export class Model {
 
     this.bones = {};
     for (const b of body.skeleton.bones) this.bones[b.name] = b;
-    // pose de repos : le ragdoll déplace des os que les clips ne réécrivent pas (positions sans piste)
-    this.rest = body.skeleton.bones.map((b) => [b, b.position.clone(), b.quaternion.clone(), b.scale.clone()]);
 
     // Coiffures : maillages statiques « origine au corps », rattachés à l'os de la tête
     this.root.updateWorldMatrix(true, true);
@@ -160,10 +158,6 @@ export class Model {
 
   update(dt) {
     this.mixer.update(dt);
-  }
-
-  resetPose() {
-    for (const [b, p, q, s] of this.rest) { b.position.copy(p); b.quaternion.copy(q); b.scale.copy(s); }
   }
 
   setFlash(k) {

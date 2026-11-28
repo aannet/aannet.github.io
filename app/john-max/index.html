@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="assets/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@600&family=Russo+One&display=swap" rel="stylesheet">
 <style>
   :root { --ink: #fff; --pink: #ff4fa0; --yellow: #ffb35c; --night: #0d0f1a; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -57,22 +57,47 @@
     background: #fff; color: #000; font: 22px/1 system-ui, sans-serif; box-shadow: 3px 3px 0 #000; z-index: 20; }
   .lil-gui.autoPlace { position: fixed !important; top: max(60px, env(safe-area-inset-top)) !important; right: max(10px, env(safe-area-inset-right)) !important; max-height: calc(100% - 70px); overflow-y: auto; z-index: 20; font-family: system-ui, sans-serif; letter-spacing: 0; --widget-height: 24px; }
 
-  /* Chargement */
-  #loader { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 12px;
-    padding-top: max(5vh, env(safe-area-inset-top)); text-align: center; transition: opacity .3s;
-    background: #0d0b10 url(assets/title.jpg) center 78% / cover no-repeat; }
-  #loader .panel { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 22px; border-radius: 6px; background: rgba(8, 6, 10, .62); }
-  #loader small { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); text-align: left; max-width: 38vw; }
-  #load-bar { width: min(60vw, 340px); height: 14px; border: 3px solid #000; background: #1a1020; box-shadow: 3px 3px 0 #000; }
+  /* Chargement / écran titre : l'image sans texte, le titre composé en CSS par-dessus */
+  #loader { position: fixed; inset: 0; z-index: 30; transition: opacity .3s;
+    background: #0d0b10 url(assets/title.jpg) center 22% / cover no-repeat; }
+  #loader.gone { opacity: 0; pointer-events: none; }
+  #title { position: absolute; right: max(4vw, env(safe-area-inset-right)); top: 50%; transform: translateY(-55%);
+    display: flex; flex-direction: column; align-items: center; text-align: center; isolation: isolate; }
+  /* halo : lueur orange + trait de lumière horizontal, qui vacillent doucement */
+  #title .glow { position: absolute; left: 50%; top: 42%; width: 150%; height: 190%; transform: translate(-50%, -50%); z-index: -1; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255,150,60,.55) 0%, rgba(255,95,25,.28) 32%, rgba(255,70,10,.08) 55%, transparent 70%);
+    mix-blend-mode: screen; animation: flicker 5s infinite; }
+  #title .glow::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 3px; transform: translateY(-50%);
+    background: linear-gradient(90deg, transparent, rgba(255,190,130,.25) 20%, #fff2e0 50%, rgba(255,190,130,.25) 80%, transparent);
+    filter: blur(1.5px); box-shadow: 0 0 18px 4px rgba(255,140,60,.45); }
+  #title h1 { position: relative; margin: 0; font: 400 clamp(42px, 9vw, 120px)/.92 'Russo One', 'Impact', sans-serif; letter-spacing: .015em;
+    color: transparent; background: linear-gradient(180deg, #fff 0%, #fff4e8 36%, #ffd0a6 52%, #ff9440 76%, #c4521c 100%);
+    -webkit-background-clip: text; background-clip: text; }
+  /* contour et ombre portée sur un calque derrière le dégradé */
+  #title h1::before, #title p::before { content: attr(data-t); position: absolute; inset: 0; z-index: -1; color: #1a0b05;
+    -webkit-text-stroke: .1em #1a0b05; }
+  #title h1::before { text-shadow: 0 .05em 0 #000, 0 0 .35em rgba(255,110,30,.6); }
+  /* reflet qui balaie les lettres */
+  #title h1::after { content: attr(data-t); position: absolute; inset: 0; color: transparent;
+    background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.85) 50%, transparent 60%) -150% 0 / 250% 100% no-repeat;
+    -webkit-background-clip: text; background-clip: text; animation: shine 4.5s 1s infinite; }
+  #title p { position: relative; margin: .35em 0 0; font: 600 clamp(15px, 2.7vw, 32px)/1 'Oswald', 'Impact', sans-serif; letter-spacing: .05em;
+    color: #ff9a45; text-shadow: 0 0 .6em rgba(255,120,40,.5); }
+  #title p::before { -webkit-text-stroke: .14em #1a0b05; }
+  #loader .panel { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: clamp(14px, 4vh, 34px); }
+  #load-bar { width: min(40vw, 300px); height: 12px; border: 3px solid #000; background: #1a1020; box-shadow: 3px 3px 0 #000; }
   #load-fill { height: 100%; width: 5%; background: #ff8a2a; transition: width .2s; }
-  #load-txt { font-size: 20px; max-width: min(70vw, 520px); overflow-wrap: anywhere; }
+  #load-txt { font-size: 18px; max-width: min(46vw, 420px); overflow-wrap: anywhere; text-shadow: 2px 2px 0 #000; }
   #load-txt.err { font: 14px/1.4 system-ui, sans-serif; letter-spacing: 0; color: #ffb35c; }
-  #tap { display: none; font-size: 28px; color: #ffb35c; text-shadow: 2px 2px 0 #000; animation: blink 1s infinite; }
+  #tap { display: none; font-size: 26px; color: #fff; text-shadow: 2px 2px 0 #000, 0 0 12px rgba(255,140,60,.8); animation: blink 1.1s infinite; }
   #loader.ready #tap { display: block; }
   #loader.ready #load-bar, #loader.ready #load-txt { display: none; }
-  #loader.gone { opacity: 0; pointer-events: none; }
-  #loader small { font: 12px/1.4 system-ui, sans-serif; opacity: .75; letter-spacing: 0; text-shadow: 1px 1px 0 #000; }
+  #loader small { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); text-align: right;
+    font: 11px/1.4 system-ui, sans-serif; opacity: .7; letter-spacing: 0; text-shadow: 1px 1px 0 #000; max-width: 44vw; }
   @keyframes blink { 50% { opacity: .35; } }
+  @keyframes flicker { 0%, 100% { opacity: 1; } 47% { opacity: .92; } 49% { opacity: .7; } 51% { opacity: .95; } 74% { opacity: .85; } }
+  @keyframes shine { 0% { background-position: -150% 0; } 35%, 100% { background-position: 150% 0; } }
+  @media (prefers-reduced-motion: reduce) { #title .glow, #title h1::after, #tap { animation: none; } }
 
   /* Portrait */
   #rotate { display: none; position: fixed; inset: 0; z-index: 40; background: var(--night); place-items: center; align-content: center; gap: 16px; text-align: center; font-size: 30px; padding: 24px; }
@@ -111,12 +136,17 @@
 <button id="btn-gui" aria-label="Réglages">⚙</button>
 
 <div id="loader">
-  <div class="panel">
-    <div id="load-bar"><div id="load-fill"></div></div>
-    <div id="load-txt">Chargement…</div>
-    <div id="tap">Touche pour taper</div>
+  <div id="title">
+    <div class="glow"></div>
+    <h1 data-t="JOHN MAX">JOHN MAX</h1>
+    <p data-t="NO PAST. NO LIMIT.">NO PAST. NO LIMIT.</p>
+    <div class="panel">
+      <div id="load-bar"><div id="load-fill"></div></div>
+      <div id="load-txt">Chargement…</div>
+      <div id="tap">Touche pour jouer</div>
+    </div>
   </div>
-  <small>Stick à gauche, PAF à droite · manette Bluetooth reconnue au premier bouton<br>Clavier : flèches, J frappe, K uppercut · G pour les réglages<br>Plein écran direct : menu du navigateur → « Ajouter à l'écran d'accueil »</small>
+  <small>Stick à gauche, PAF frappe, UP uppercut · manette Bluetooth reconnue au premier bouton<br>Clavier : flèches, J, K · G pour les réglages<br>Plein écran direct : menu du navigateur → « Ajouter à l'écran d'accueil »</small>
 </div>
 
 <div id="rotate"><div class="phone"></div><div>Tourne ton téléphone</div></div>
