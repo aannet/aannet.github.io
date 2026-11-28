@@ -5,6 +5,8 @@ export const CFG = {
 
   // Rendu : nombre de lignes à l'écran (0 = résolution native)
   renderLines: 540,
+  fxScale: 1.2, // taille des effets d'impact (atlas)
+  fxTime: 1.2, // durée des effets d'impact
 
   // Temps
   timeScale: 1,

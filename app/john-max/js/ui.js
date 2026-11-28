@@ -118,6 +118,8 @@ export function buildGui(GUI, game) {
   c.add(CFG, 'camPunch', 0, 0.3, 0.01).name('punch zoom');
 
   const k = f('Impact');
+  k.add(CFG, 'fxScale', 0.5, 2.5, 0.05).name('taille des effets ×');
+  k.add(CFG, 'fxTime', 0.5, 2.5, 0.05).name('durée des effets ×');
   k.add(CFG, 'knockLight', 0, 6, 0.1).name('recul coup léger');
   k.add(CFG, 'knockHeavy', 0, 20, 0.1).name('impulsion coup fort');
   k.add(CFG, 'knockUp', 0, 10, 0.1).name('impulsion verticale');

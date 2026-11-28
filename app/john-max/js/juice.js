@@ -56,7 +56,8 @@ class FxPool {
     this.i = 0;
   }
   spawn(p, dur, s0, s1, { a0 = 1, rot = 0, flip = 1, vy = 0 } = {}) {
-    const it = this.items[this.i];
+    const it = this.items[this.i], ks = CFG.fxScale, kt = CFG.fxTime; // réglages globaux (panneau ⚙)
+    dur *= kt; s0 *= ks; s1 *= ks;
     this.i = (this.i + 1) % this.items.length;
     it.m.position.copy(p);
     it.m.material.rotation = rot;
@@ -223,7 +224,7 @@ export class Juice {
     g.visible = true;
     f.visible = true;
     f.position.copy(p);
-    const fs = (0.16 + 0.12 * k) * (0.94 + Math.random() * 0.12);
+    const fs = (0.16 + 0.12 * k) * (0.94 + Math.random() * 0.12) * CFG.fxScale;
     f.scale.set(fs * FX_UV.fire[4] * facing, fs, 1);
     f.material.opacity = 0.5 + 0.5 * k;
     g.position.copy(p);
