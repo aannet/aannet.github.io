@@ -13,7 +13,7 @@
 
 - Toutes les commandes sont listées dans le bouton AIDE de l'accueil.
 - Tactile : stick virtuel n'importe où sur la moitié gauche, bouton PAF à droite, SAUT (vert).
-- Tactile : bouton UP pour le smash (jauge pleine), ESQ pour la roulade, ❚❚ en haut à droite pour la pause. PAF maintenu : Charged Punch.
+- Tactile : croix directionnelle fixe en bas à gauche (un appui n'importe où sur la moitié gauche se lit par rapport à son centre), bouton UP pour le smash (jauge pleine), ESQ pour la roulade, ❚❚ en haut à droite pour la pause. PAF maintenu : Charged Punch.
 - Manette Bluetooth : reconnue au premier bouton. Stick gauche ou croix, X frapper (maintenu : Charged Punch), Y smash, A saut, B ou RB roulade, Start pause, Select réglages.
 - Clavier : flèches ou ZQSD/WASD, J frapper (maintenu : Charged Punch), K smash, Espace saut, L ou Maj roulade, P ou Échap pause, G réglages.
 - Combo : jab, cross, crochet (le 3e coup projette l'ennemi). Avec la batte : 2 swings lourds.

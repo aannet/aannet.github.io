@@ -99,43 +99,42 @@ export class Input {
 
   _bindTouch() {
     const zone = document.getElementById('stick-zone');
-    const base = document.getElementById('stick-base');
-    const knob = document.getElementById('stick-knob');
+    const pad = document.getElementById('dpad');
     const btn = document.getElementById('btn-attack');
-    const R = 52;
     if (!zone) return;
-
-    zone.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'touch') this._setMode('touch');
-      if (this.stick.id !== null) return;
-      this.stick.id = e.pointerId;
-      this.stick.ox = e.clientX;
-      this.stick.oy = e.clientY;
-      zone.setPointerCapture(e.pointerId);
-      base.style.left = e.clientX + 'px';
-      base.style.top = e.clientY + 'px';
-      base.classList.add('on');
-      document.body.classList.add('stick-used');
-      knob.style.transform = 'translate(-50%,-50%)';
-      e.preventDefault();
-    });
-    zone.addEventListener('pointermove', (e) => {
-      if (e.pointerId !== this.stick.id) return;
-      let dx = e.clientX - this.stick.ox;
-      let dy = e.clientY - this.stick.oy;
+    const arrows = { u: pad.querySelector('.u'), d: pad.querySelector('.d'), l: pad.querySelector('.l'), r: pad.querySelector('.r') };
+    const R = 56;
+    // croix fixe : la direction se lit par rapport à son centre, où que tombe le pouce dans la moitié gauche
+    const read = (e) => {
+      const b = pad.getBoundingClientRect();
+      let dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2);
       const d = Math.hypot(dx, dy);
       if (d > R) { dx *= R / d; dy *= R / d; }
       const k = Math.min(1, d / R);
       const s = k < STICK_DEAD ? 0 : (k - STICK_DEAD) / (1 - STICK_DEAD) / (k || 1);
       this.stick.x = (dx / R) * s;
       this.stick.z = (dy / R) * s;
-      knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      this._arrows();
+    };
+    this._arrows = () => {
+      const { x, z } = this.stick;
+      arrows.l.classList.toggle('on', x < -0.35); arrows.r.classList.toggle('on', x > 0.35);
+      arrows.u.classList.toggle('on', z < -0.35); arrows.d.classList.toggle('on', z > 0.35);
+    };
+    zone.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') this._setMode('touch');
+      if (this.stick.id !== null) return;
+      this.stick.id = e.pointerId;
+      zone.setPointerCapture(e.pointerId);
+      read(e);
+      e.preventDefault();
     });
+    zone.addEventListener('pointermove', (e) => { if (e.pointerId === this.stick.id) read(e); });
     const end = (e) => {
       if (e.pointerId !== this.stick.id) return;
       this.stick.id = null;
       this.stick.x = this.stick.z = 0;
-      base.classList.remove('on');
+      this._arrows();
     };
     zone.addEventListener('pointerup', end);
     zone.addEventListener('pointercancel', end);

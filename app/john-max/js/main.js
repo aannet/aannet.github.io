@@ -89,7 +89,7 @@ async function boot() {
   const pauseEl = document.getElementById('pause');
   const pauseTitle = document.getElementById('pause-title'), pauseSub = document.getElementById('pause-sub');
   const resumeBtn = document.getElementById('pause-resume');
-  game.paused = false;
+  game.paused = true; // gelé derrière l'écran titre, lancé par JOUER
   let gameOver = false, continues = 0;
   const setPause = (on) => {
     if (gameOver && !on) return;
@@ -209,6 +209,29 @@ async function boot() {
     game.weapons.update(gdt);
   }
 
+  // Portrait du HUD : photo du héros (vrai modèle, pose de garde) prise une fois dans une cible de 96 px
+  let portraitDone = 0;
+  function snapshotPortrait() {
+    const S = 96, h = game.hero, rt = new THREE.WebGLRenderTarget(S, S, { samples: 4 });
+    rt.texture.colorSpace = THREE.SRGBColorSpace;
+    const cam = new THREE.PerspectiveCamera(24, 1, 0.1, 30);
+    const head = h.headPos(new THREE.Vector3());
+    cam.position.set(head.x + h.facing * 0.75, head.y + 0.05, head.z + 1.5);
+    cam.lookAt(head.x, head.y - 0.3, head.z);
+    const bars = game.enemies.map((e) => e.bar.visible);
+    game.enemies.forEach((e) => { e.bar.visible = false; });
+    renderer.setRenderTarget(rt);
+    renderer.render(scene, cam);
+    const px = new Uint8Array(S * S * 4);
+    renderer.readRenderTargetPixels(rt, 0, 0, S, S, px);
+    renderer.setRenderTarget(null);
+    game.enemies.forEach((e, i) => { e.bar.visible = bars[i]; });
+    rt.dispose();
+    const cv = document.querySelector('#portrait canvas'), c = cv.getContext('2d'), img = c.createImageData(S, S);
+    for (let y = 0; y < S; y++) img.data.set(px.subarray((S - 1 - y) * S * 4, (S - y) * S * 4), y * S * 4); // lignes inversées (GL)
+    c.putImageData(img, 0, 0);
+  }
+
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -216,6 +239,7 @@ async function boot() {
     game.input.poll();
     if (game.paused) { requestAnimationFrame(frame); return; }
     game.time.advance(dt, tick);
+    if (portraitDone < 30 && ++portraitDone === 30) snapshotPortrait(); // une fois le héros posé dans sa garde
     game.juice.update(dt);
     game.ui.update(dt);
     for (const e of game.enemies) e.updateBar();
@@ -231,11 +255,14 @@ async function boot() {
     camera.updateProjectionMatrix();
   });
 
+  game.hero.step(1 / 60); // pose de garde
+  renderer.render(scene, camera); // compile les shaders pendant l'écran titre
   progress(1, 'Prêt');
   const loader = document.getElementById('loader');
   loader.classList.add('ready');
   const start = () => {
     unlockAudio();
+    game.paused = false;
     loader.classList.add('gone');
   };
   // aide : panneau des commandes, fermé par ✕, Échap ou un toucher hors de la carte

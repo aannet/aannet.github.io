@@ -13,6 +13,12 @@ export class UI {
     this.msgEl = document.getElementById('msg');
     this.fpsEl = document.getElementById('fps');
     this.koEl = document.getElementById('ko-count');
+    this.hpPct = document.getElementById('hp-pct');
+    this.spLbl = document.getElementById('sp-lbl');
+    this.comboNEl = document.getElementById('combo-n');
+    this.comboFill = document.getElementById('combo-fill');
+    this.lastHp = -1;
+    this.lastSp = -1;
     this.comboN = 0;
     this.comboT = 0;
     this.msgT = 0;
@@ -25,16 +31,17 @@ export class UI {
     this.comboN = this.comboT > 0 ? this.comboN + 1 : 1;
     this.comboT = 1.3;
     if (this.comboN >= 2) {
-      this.comboEl.textContent = `${this.comboN} HITS`;
-      this.comboEl.classList.remove('pop');
-      void this.comboEl.offsetWidth;
-      this.comboEl.classList.add('pop', 'on');
+      this.comboNEl.textContent = `X${this.comboN} COMBO`;
+      this.comboNEl.classList.remove('pop');
+      void this.comboNEl.offsetWidth;
+      this.comboNEl.classList.add('pop');
+      this.comboEl.classList.add('on');
     }
   }
 
   ko() {
     this.kos++;
-    this.koEl.textContent = `KO ${String(this.kos).padStart(2, '0')}`;
+    this.koEl.textContent = String(this.kos).padStart(2, '0');
   }
 
   message(text, dur = 1) {
@@ -59,13 +66,17 @@ export class UI {
 
   update(dt) {
     const h = this.game.hero;
-    this.hpFill.style.width = `${Math.max(0, (h.hp / h.maxHp) * 100)}%`;
-    this.spFill.style.width = `${h.special}%`;
+    // le DOM n'est touché que si la valeur change
+    const hp = Math.max(0, Math.round((h.hp / h.maxHp) * 100));
+    if (hp !== this.lastHp) { this.lastHp = hp; this.hpFill.style.width = hp + '%'; this.hpPct.textContent = `HP ${hp}%`; }
+    const sp = Math.round(h.special);
     const ready = h.special >= 100;
+    if (sp !== this.lastSp) { this.lastSp = sp; this.spFill.style.width = sp + '%'; this.spLbl.innerHTML = ready ? 'MAX<br>READY' : sp + '%'; }
     this.status.classList.toggle('ready', ready);
     this.upBtn.classList.toggle('ready', ready);
     this.comboT -= dt;
     if (this.comboT <= 0) this.comboEl.classList.remove('on');
+    else this.comboFill.style.width = `${(this.comboT / 1.3) * 100}%`;
     this.msgT -= dt;
     if (this.msgT <= 0) this.msgEl.classList.remove('on');
     this.frames++;
