@@ -15,7 +15,7 @@
 - Tactile : bouton UP (orange) pour l'uppercut.
 - Manette Bluetooth : reconnue au premier bouton. Stick gauche ou croix, A/X pour frapper, Y/B pour l'uppercut, Start pour les réglages.
 - Clavier : flèches ou ZQSD/WASD, J/Espace pour frapper, K pour l'uppercut, G pour les réglages.
-- Combo : jab, cross, crochet (le 3e coup envoie en ragdoll). Avec la batte : 2 swings lourds.
+- Combo : jab, cross, crochet (le 3e coup projette l'ennemi). Avec la batte : 2 swings lourds.
 - Uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
 - La batte est au fond à gauche : marcher dessus pour la prendre. Elle casse au bout de N coups, une autre tombe 5 s plus tard.
 
