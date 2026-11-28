@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { Character } from './character.js';
-import { FIST_COMBO, BAT_COMBO, UPPERCUT, resolveHit, resolveRagdollHit } from './combat.js';
+import { FIST_COMBO, BAT_COMBO, UPPERCUT, resolveHit, resolveJuggle } from './combat.js';
 import { sfx } from './audio.js';
 
 const _p = new THREE.Vector3();
@@ -81,7 +81,7 @@ export class Hero extends Character {
       if (Math.abs(mx) > 0.15) this.facing = Math.sign(mx);
       const v = Math.hypot(dx, dz) / dt;
       if (v > 0.2) {
-        this.anim('Jog_Fwd_Loop', { fade: 0.15, speed: Math.max(0.6, v / JOG_SPEED) });
+        this.anim('Jog_Fwd_Loop', { fade: 0.15, speed: Math.max(0.6, v / (JOG_SPEED * CFG.animSpeed)) });
         lean = -mz * 0.6;
       } else {
         this.anim(this.bat ? 'Sword_Idle' : 'Guard', { fade: 0.2, speed: this.bat ? 1 : 0, loop: true });
@@ -144,16 +144,21 @@ export class Hero extends Character {
           }
           if (hit) {
             this.hitSet.add(e);
-            resolveRagdollHit(this.game, A, e, p);
+            resolveJuggle(this.game, A, e, p);
             if (A.bat && this.bat) this.bat.used();
             break;
           }
         }
         continue;
       }
-      if (!e.hittable()) continue;
+      const air = e.airborne();
+      if (!air && !e.hittable()) continue;
       if ((e.x - this.x) * this.facing < -0.25) continue;
       for (const p of pts) {
+        if (air) {
+          if (e.hurtDist(p) < A.r + 0.4 && Math.abs(e.z - this.z) < 0.8) { this.hitSet.add(e); resolveJuggle(this.game, A, e, _p.copy(p)); if (A.bat && this.bat) this.bat.used(); break; }
+          continue;
+        }
         if (e.hurtDist(p) < A.r + 0.28 && Math.abs(e.z - this.z) < 0.7) {
           this.hitSet.add(e);
           _p.copy(p);

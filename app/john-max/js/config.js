@@ -1,5 +1,8 @@
 // Tous les réglages de game feel, exposés dans le panneau de debug.
 export const CFG = {
+  // Nervosité : vitesse de toutes les animations (1 = vitesse des clips)
+  animSpeed: 1.15,
+
   // Rendu : nombre de lignes à l'écran (0 = résolution native)
   renderLines: 360,
 
@@ -30,7 +33,8 @@ export const CFG = {
   groundDrag: 5,
   gravity: 13,
 
-  // Ragdoll
+  // Ragdoll (désactivé : chutes animées)
+  ragdoll: false,
   ragdollDelay: 0.09,
   ragdollParts: 7,
   jointFriction: 0.25,
@@ -47,9 +51,9 @@ export const CFG = {
   // Combat
   inputBuffer: 0.25,
   damageMult: 1,
-  heroSpeed: 3.4,
+  heroSpeed: 3.9,
   heroInvincible: false,
-  enemySpeed: 1.7,
+  enemySpeed: 1.95,
   enemyAggro: 1,
 
   // Batte

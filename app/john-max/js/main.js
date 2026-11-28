@@ -16,6 +16,17 @@ const loadBar = document.getElementById('load-fill');
 const loadTxt = document.getElementById('load-txt');
 const progress = (k, txt) => { loadBar.style.width = `${k * 100}%`; loadTxt.textContent = txt; };
 
+// Plein écran + paysage : le navigateur exige un geste. On le demande au premier toucher (même pendant
+// le chargement) et à nouveau si le joueur en sort. Installé sur l'écran d'accueil (manifeste), le jeu
+// s'ouvre directement en plein écran.
+async function goFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || !matchMedia('(pointer: coarse)').matches || !el.requestFullscreen) return;
+  try { await el.requestFullscreen({ navigationUI: 'hide' }); } catch (e) { return; }
+  try { await screen.orientation.lock('landscape'); } catch (e) {}
+}
+window.addEventListener('pointerdown', goFullscreen);
+
 async function boot() {
   loadSavedCfg();
   progress(0.25, 'Physique…');
@@ -88,30 +99,31 @@ async function boot() {
     game.level.update(camX.v, game.time.real, dt);
   }
 
-  // « Bowling » : un ragdoll lancé renverse les ennemis debout qu'il percute
+  // « Bowling » : un ennemi projeté (ragdoll ou chute animée) renverse ceux qu'il percute
+  const _bp = new THREE.Vector3();
+  function bowlHit(a, b, p, v) {
+    a.bowled.add(b);
+    b.hp -= 12 * CFG.damageMult;
+    const ko = b.hp <= 0;
+    b.heavyHit({ x: v.x * 0.75, y: Math.max(2.5, v.y * 0.4 + 2.5), z: (v.z || 0) * 0.5, spin: -Math.sign(v.x) * 4 });
+    game.juice.flash(b.rig);
+    game.juice.shake(CFG.shakeHeavy * 0.8);
+    game.juice.hit(_bp.set(p.x, p.y, p.z), Math.sign(v.x), 1, b.headPos(new THREE.Vector3()));
+    game.time.hitstop(CFG.hitstopHeavy * 0.7);
+    sfx.punch(true);
+    game.ui.combo();
+    if (ko) game.onKO(b);
+  }
   function bowling() {
     if (!CFG.ragdollBowling) return;
     for (const a of game.enemies) {
-      if (!a.ragdoll) continue;
-      a.ragdoll.forEachFast(4, (p, v, s) => {
-        for (const b of game.enemies) {
-          if (b === a || !b.hittable() || a.bowled.has(b)) continue;
-          if (Math.hypot(p.x - b.x, p.z - b.z) < 0.45 && p.y < 1.8) {
-            a.bowled.add(b);
-            b.hp -= 12 * CFG.damageMult;
-            const ko = b.hp <= 0;
-            b.heavyHit({ x: v.x * 0.75, y: Math.max(2.5, v.y * 0.4 + 2.5), z: v.z * 0.5, spin: -Math.sign(v.x) * 4 });
-            game.juice.flash(b.rig);
-            game.juice.shake(CFG.shakeHeavy * 0.8);
-            game.juice.star(new THREE.Vector3(p.x, p.y, p.z), 1.1);
-            game.juice.sparks(p, Math.sign(v.x), 16, true);
-            game.time.hitstop(CFG.hitstopHeavy * 0.7);
-            sfx.punch(true);
-            game.ui.combo();
-            if (ko) game.onKO(b);
-          }
-        }
-      });
+      const targets = (p) => game.enemies.filter((b) => b !== a && b.hittable() && !a.bowled.has(b) && Math.hypot(p.x - b.x, p.z - b.z) < 0.5 && p.y < 1.8);
+      if (a.ragdoll) {
+        a.ragdoll.forEachFast(4, (p, v) => { for (const b of targets(p)) bowlHit(a, b, p, v); });
+      } else if (a.state === 'knock' && Math.abs(a.vx) > 2.5) {
+        const p = { x: a.x + Math.sign(a.vx) * 0.3, y: a.y + 0.6, z: a.z };
+        for (const b of targets(p)) bowlHit(a, b, p, { x: a.vx, y: a.vy });
+      }
     }
   }
 
@@ -171,12 +183,9 @@ async function boot() {
   progress(1, 'Prêt');
   const loader = document.getElementById('loader');
   loader.classList.add('ready');
-  const start = async () => {
+  const start = () => {
     unlockAudio();
     loader.classList.add('gone');
-    const el = document.documentElement;
-    try { if (el.requestFullscreen && matchMedia('(pointer: coarse)').matches) await el.requestFullscreen({ navigationUI: 'hide' }); } catch (e) {}
-    try { await screen.orientation.lock('landscape'); } catch (e) {}
   };
   loader.addEventListener('pointerdown', start, { once: true });
   window.addEventListener('keydown', () => { if (!loader.classList.contains('gone')) start(); }, { once: true });

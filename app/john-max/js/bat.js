@@ -82,7 +82,7 @@ export class Bat {
     this.state = 'gone';
     this.respawnT = 5;
     sfx.crack();
-    this.game.juice.sparks(_p, hero.facing, 18, true);
+    this.game.juice.hit(_p, hero.facing, 2);
     this.game.ui.message('CRAC !', 0.8);
     // deux morceaux physiques
     const half = new THREE.CylinderGeometry(0.045, 0.058, LEN / 2, 10);

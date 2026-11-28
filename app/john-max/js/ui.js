@@ -63,6 +63,11 @@ export function buildGui(GUI, game) {
   gui.hide();
   const f = (name) => gui.addFolder(name);
 
+  const n = f('Nervosité');
+  n.add(CFG, 'animSpeed', 0.6, 1.6, 0.01).name('vitesse des animations');
+  n.add(CFG, 'heroSpeed', 1, 7, 0.1).name('vitesse héros');
+  n.add(CFG, 'enemySpeed', 0.5, 4, 0.1).name('vitesse ennemis');
+
   const r = f('Rendu');
   r.add(CFG, 'renderLines', { '240 (gros pixels)': 240, '360': 360, '540': 540, 'natif': 0 }).name('résolution').onChange(() => game.applyRes());
 
@@ -88,13 +93,14 @@ export function buildGui(GUI, game) {
   k.add(CFG, 'batMult', 1, 4, 0.1).name('multiplicateur batte');
   k.add(CFG, 'groundDrag', 0, 15, 0.5).name('frottement au sol');
   k.add(CFG, 'gravity', 5, 25, 0.5).name('gravité').onChange((v) => { game.world.gravity = { x: 0, y: -v, z: 0 }; });
+  k.add(CFG, 'ragdoll').name('ragdoll (sinon chutes animées)');
   k.add(CFG, 'ragdollDelay', 0, 0.25, 0.005).name('délai avant ragdoll (s)');
   k.add(CFG, 'ragdollParts', { '7 corps (boîte)': 7, '11 corps': 11 }).name('ragdoll');
   k.add(CFG, 'jointFriction', 0, 2, 0.05).name('raideur des joints');
   k.add(CFG, 'angDamp', 0, 3, 0.05).name('amorti angulaire');
   k.add(CFG, 'ragdollBowling').name('ragdoll renverse les autres');
   k.add(CFG, 'flashTime', 0, 0.2, 0.005).name('flash (s)');
-  k.add(CFG, 'particles', 0, 3, 0.1).name('quantité étincelles');
+  k.add(CFG, 'particles', 0, 3, 0.1).name('quantité de particules');
 
   const u = f('Uppercut & juggle');
   u.add(CFG, 'upperUp', 2, 14, 0.1).name('uppercut vertical');
@@ -105,8 +111,6 @@ export function buildGui(GUI, game) {
   const cb = f('Combat');
   cb.add(CFG, 'inputBuffer', 0, 0.5, 0.01).name('buffer input (s)');
   cb.add(CFG, 'damageMult', 0.2, 5, 0.1).name('dégâts ×');
-  cb.add(CFG, 'heroSpeed', 1, 7, 0.1).name('vitesse héros');
-  cb.add(CFG, 'enemySpeed', 0.5, 4, 0.1).name('vitesse ennemis');
   cb.add(CFG, 'enemyAggro', 0.3, 3, 0.1).name('agressivité');
   cb.add(CFG, 'heroInvincible').name('héros invincible');
 

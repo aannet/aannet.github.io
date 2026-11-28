@@ -4,6 +4,8 @@
 
 ## Lancer
 
+- Plein écran : le premier toucher passe en plein écran. Pour un plein écran direct dès l'ouverture, menu du navigateur → « Ajouter à l'écran d'accueil » (manifeste `display: fullscreen`, paysage).
+
 - En ligne : pousser le dossier dans `aannet.github.io/app/<nom>/`, ouvrir l'URL sur le téléphone.
 - En local : `npx serve .` (ou `python3 -m http.server`) puis ouvrir `http://localhost:3000`. Le `file://` ne marche pas (modules ES).
 
@@ -49,7 +51,7 @@ Tout le game feel est réglable en direct : hitstop, shake, punch caméra, impul
 - Rim light par patch du shader toon (un seul programme GPU) plutôt que des lumières en plus.
 - Pluie entièrement dans le vertex shader. Façade et détails peints dans une texture canvas.
 
-Règle de bascule : coup léger = animation de hit ; coup fort ou KO = quelques frames de réaction animée puis ragdoll avec l'impulsion. Un ragdoll lancé renverse les ennemis debout qu'il percute (« bowling », désactivable).
+Coup fort : chute animée par défaut (`Hit_Knockback` + trajectoire balistique, puis `LayToIdle` qui s'enchaîne sans saut). Le ragdoll Rapier reste activable dans ⚙ > Impact. Un ennemi projeté renverse ceux qu'il percute (« bowling », désactivable).
 
 ## Personnages et animations
 

@@ -32,8 +32,7 @@ export function resolveHit(game, A, enemy, point) {
   juice.shake(heavy ? CFG.shakeHeavy * (A.bat ? 1.3 : 1) : CFG.shakeLight);
   if (heavy) juice.camPunch(CFG.camPunch * (A.bat ? 1.4 : 1));
   juice.flash(enemy.rig);
-  juice.sparks(point, dir, heavy ? 28 : 12, heavy);
-  juice.star(point, heavy ? 1.2 : 0.65);
+  juice.hit(point, dir, A.bat ? 2 : heavy ? 1 : 0, enemy.headPos(_l));
   if (A.bat) sfx.bat(); else sfx.punch(heavy);
   game.ui.combo();
 
@@ -49,17 +48,23 @@ export function resolveHit(game, A, enemy, point) {
   if (ko) game.onKO(enemy);
 }
 
-// Coup sur un ennemi en ragdoll : en l'air on le maintient (juggle), au sol on le relance.
-export function resolveRagdollHit(game, A, enemy, point) {
+// Coup sur un ennemi déjà projeté (ragdoll ou chute animée) : en l'air on le maintient (juggle).
+export function resolveJuggle(game, A, enemy, point) {
   const { juice, time, hero } = game;
-  const c = enemy.ragdoll.center(_l);
-  const dir = Math.sign(c.x - hero.x) || hero.facing;
   const m = A.bat ? CFG.batMult : 1;
-  let vel;
-  if (A.launcher) vel = { x: dir * CFG.upperX, y: CFG.upperUp * 0.85, z: 0 };
-  else if (c.y > 0.55) vel = { x: dir * CFG.juggleX * (A.heavy ? 2.5 * m : 1), y: CFG.juggleUp * (A.heavy ? 1.15 : 1), z: 0 };
-  else { const k = A.heavy ? 1 : 0.45; vel = { x: dir * CFG.knockHeavy * m * k, y: CFG.knockUp * (0.6 + k), z: (Math.random() - 0.5) * 1.2 }; }
-  enemy.ragdoll.hit(point, vel);
+  if (enemy.ragdoll) {
+    const c = enemy.ragdoll.center(_l);
+    const dir = Math.sign(c.x - hero.x) || hero.facing;
+    let vel;
+    if (A.launcher) vel = { x: dir * CFG.upperX, y: CFG.upperUp * 0.85, z: 0 };
+    else if (c.y > 0.55) vel = { x: dir * CFG.juggleX * (A.heavy ? 2.5 * m : 1), y: CFG.juggleUp * (A.heavy ? 1.15 : 1), z: 0 };
+    else { const k = A.heavy ? 1 : 0.45; vel = { x: dir * CFG.knockHeavy * m * k, y: CFG.knockUp * (0.6 + k), z: (Math.random() - 0.5) * 1.2 }; }
+    enemy.ragdoll.hit(point, vel);
+  } else {
+    const dir = Math.sign(enemy.x - hero.x) || hero.facing;
+    if (A.launcher) enemy.juggle(dir * CFG.upperX, CFG.upperUp * 0.85);
+    else enemy.juggle(dir * CFG.juggleX * (A.heavy ? 2.5 * m : 1), CFG.juggleUp * (A.heavy ? 1.15 : 1));
+  }
   enemy.t = 0; // relance le délai de relevé / respawn tant qu'on le garde en l'air
   if (!enemy.ko) {
     enemy.hp -= A.dmg * CFG.damageMult * 0.6;
@@ -68,8 +73,7 @@ export function resolveRagdollHit(game, A, enemy, point) {
   time.hitstop((A.heavy ? CFG.hitstopHeavy : CFG.hitstopLight) * 0.8);
   juice.shake(A.heavy ? CFG.shakeHeavy * 0.8 : CFG.shakeLight);
   juice.flash(enemy.rig);
-  juice.sparks(point, dir, 14, A.heavy);
-  juice.star(point, 0.8);
+  juice.hit(point, Math.sign(point.x - hero.x) || hero.facing, A.bat ? 2 : A.heavy ? 1 : 0, enemy.headPos(_l));
   if (A.bat) sfx.bat(); else sfx.punch(A.heavy);
   game.ui.combo();
 }

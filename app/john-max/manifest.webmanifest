@@ -1,0 +1,15 @@
+{
+  "name": "John Max",
+  "short_name": "John Max",
+  "description": "Beat'em up 2.5D sous la pluie de Neo-Tokyo. NO PAST. NO LIMIT.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0d0f1a",
+  "theme_color": "#0d0f1a",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -36,7 +36,7 @@ export class Blobs {
         const t = ch.ragdoll.bodies.torso.translation();
         this.set(i++, t.x, t.z, 1.1, Math.max(0, t.y - 0.3));
       } else {
-        this.set(i++, ch.x, ch.z, 0.9, 0);
+        this.set(i++, ch.x, ch.z, 0.9, ch.y);
       }
     }
     for (const p of game.level.props) {

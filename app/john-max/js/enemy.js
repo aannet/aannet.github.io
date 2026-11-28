@@ -46,7 +46,12 @@ export class Enemy extends Character {
   }
 
   hittable() {
-    return this.active && !this.ragdoll && this.state !== 'react' && this.state !== 'enter' && this.state !== 'getup';
+    return this.active && !this.ragdoll && ['approach', 'attack', 'hitstun'].includes(this.state);
+  }
+
+  // En l'air après un coup fort (chute animée) : on peut le rattraper (juggle)
+  airborne() {
+    return this.state === 'knock' && this.y > 0.12;
   }
 
   releaseToken() {
@@ -69,6 +74,7 @@ export class Enemy extends Character {
     this.hitDir = Math.sign(launch.x) || 1;
     this.facing = -this.hitDir;
     this.bowled.clear();
+    if (!CFG.ragdoll) return this.knock(launch.x, launch.y);
     if (CFG.ragdollDelay <= 0 || launch.instant) this.goRagdoll(launch);
     else {
       this.anim('Hit_Knockback', { fade: 0.03, restart: true, speed: 1.4 });
@@ -76,9 +82,27 @@ export class Enemy extends Character {
     }
   }
 
+  // Chute animée : Hit_Knockback (finit sur le dos) + trajectoire balistique du root.
+  // Sa dernière pose correspond à la première de LayToIdle : le relevé s'enchaîne sans saut.
+  knock(vx, vy, from = 0) {
+    this.vx = vx;
+    this.vy = vy;
+    this.y = Math.max(this.y, 0.01);
+    this.facing = vx ? -Math.sign(vx) : this.facing;
+    this.anim('Hit_Knockback', { fade: 0.04, restart: true, from, speed: 1.1 });
+    this.setState('knock');
+  }
+
+  // Coup reçu en l'air : on le relance vers le haut
+  juggle(vx, vy) {
+    this.knock(vx, Math.max(this.vy, 0) * 0.3 + vy, 0.05);
+  }
+
   respawn() {
     const hero = this.game.hero;
     if (this.ragdoll) { this.ragdoll.dispose(); this.ragdoll = null; }
+    this.model.resetPose();
+    this.y = this.vx = this.vy = 0;
     this.collider.setEnabled(true);
     this.hp = this.maxHp;
     this.ko = false;
@@ -94,7 +118,7 @@ export class Enemy extends Character {
   }
 
   walkAnim(v) {
-    if (v > 0.15) this.anim('Walk_Loop', { fade: 0.2, speed: Math.max(0.5, v / WALK_SPEED) });
+    if (v > 0.15) this.anim('Walk_Loop', { fade: 0.2, speed: Math.max(0.5, v / (WALK_SPEED * CFG.animSpeed)) });
     else this.anim('Guard', { fade: 0.25, speed: 0, loop: true });
   }
 
@@ -193,6 +217,34 @@ export class Enemy extends Character {
         this.updateBar();
         return;
       }
+      case 'knock': {
+        const a = this.model.actions.Hit_Knockback;
+        const air = this.y > 0;
+        this.x += this.vx * dt;
+        if (air) {
+          this.vy -= CFG.gravity * dt;
+          this.y += this.vy * dt;
+          this.vx *= Math.exp(-0.6 * dt);
+          a.timeScale = a.time > 0.22 ? 0 : 1.1; // reste cambré en l'air, finit la chute à l'atterrissage
+          if (this.y <= 0) {
+            this.y = 0;
+            a.timeScale = 1.1;
+            if (this.vy < -2.5) { sfx.thud(-this.vy / 8); game.juice.dust(this.x, this.z, 1); game.juice.shake(Math.min(0.2, -this.vy * 0.02)); }
+            this.vy = 0;
+          }
+        } else {
+          this.vx *= Math.exp(-CFG.groundDrag * dt);
+        }
+        if (!air && this.y === 0 && (a.time >= a.getClip().duration - 0.02 || !a.isRunning())) this.setState('down');
+        break;
+      }
+      case 'down': {
+        this.x += this.vx * dt;
+        this.vx *= Math.exp(-CFG.groundDrag * dt);
+        if (this.ko) { if (this.t > 2.5) this.respawn(); }
+        else if (this.t > 0.35) { this.anim('LayToIdle', { fade: 0.05, restart: true, speed: 1.2 }); this.setState('getup'); }
+        break;
+      }
       case 'getup': {
         const a = this.model.actions.LayToIdle;
         if (!a.isRunning() || a.time >= a.getClip().duration - 0.05) { this.cooldown = 0.6; this.setState('approach'); }
@@ -220,7 +272,7 @@ export class Enemy extends Character {
   }
 
   updateBar() {
-    const show = this.active && (!this.ko || this.t < 0.8) && this.state !== 'enter';
+    const show = this.active && !(this.ko && this.state === 'down') && this.state !== 'enter';
     this.bar.visible = show;
     if (!show) return;
     this.headPos(_p);

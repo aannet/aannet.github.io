@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G, groups } from './config.js';
+import { CFG, G, groups } from './config.js';
 import { Model } from './model.js';
 import { Ragdoll, PARTS } from './ragdoll.js';
 import { ARENA } from './level.js';
@@ -19,6 +19,9 @@ export class Character {
     this.yaw = this.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
     this.lean = 0; // léger pivot vers la profondeur quand il se déplace en Z
     this.kx = 0;
+    this.y = 0; // hauteur en l'air (chutes animées)
+    this.vx = 0;
+    this.vy = 0;
     this.maxHp = opts.hp || 100;
     this.hp = this.maxHp;
     this.state = 'free';
@@ -68,12 +71,13 @@ export class Character {
   step(dt, leanTarget = 0) {
     if (dt <= 0) return;
     this.lastDt = dt;
+    this.model.mixer.timeScale = CFG.animSpeed;
     this.model.update(dt);
     const goal = this.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
     this.yaw += (goal - this.yaw) * (1 - Math.exp(-20 * dt));
     this.lean += (leanTarget - this.lean) * (1 - Math.exp(-10 * dt));
     const root = this.model.root;
-    root.position.set(this.x, 0, this.z);
+    root.position.set(this.x, this.y, this.z);
     root.rotation.set(0, this.yaw + this.lean * this.facing, 0);
     root.updateMatrixWorld(true);
     const bones = this.model.bones;
@@ -91,7 +95,7 @@ export class Character {
 
   // Distance d'un point à la capsule « hurtbox » du perso debout
   hurtDist(p) {
-    const y = Math.max(0.25, Math.min(1.65, p.y));
+    const y = Math.max(0.25 + this.y, Math.min(1.65 + this.y, p.y));
     return Math.hypot(p.x - this.x, p.y - y, p.z - this.z);
   }
 
@@ -116,6 +120,7 @@ export class Character {
     this.collider.setEnabled(true);
     this.body.setTranslation({ x: this.x, y: 0.9, z: this.z }, true);
     this.histReady = false;
+    this.model.resetPose();
     if (getupClip) this.anim(getupClip, { fade: 0.15, restart: true });
   }
 
