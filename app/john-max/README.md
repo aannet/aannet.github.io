@@ -4,7 +4,7 @@
 
 ## Lancer
 
-- Plein écran : le premier toucher passe en plein écran. Pour un plein écran direct dès l'ouverture, menu du navigateur → « Ajouter à l'écran d'accueil » (manifeste `display: fullscreen`, paysage).
+- Démarrage par le bouton JOUER (ou Entrée). Plein écran au premier toucher. Pour un plein écran direct dès l'ouverture, menu du navigateur → « Ajouter à l'écran d'accueil » (manifeste `display: fullscreen`, paysage).
 
 - En ligne : pousser le dossier dans `aannet.github.io/app/<nom>/`, ouvrir l'URL sur le téléphone.
 - En local : `npx serve .` (ou `python3 -m http.server`) puis ouvrir `http://localhost:3000`. Le `file://` ne marche pas (modules ES).
@@ -44,7 +44,8 @@ Tout le game feel est réglable en direct : vitesse des animations, hitstop, sha
 
 ## Choix d'optimisation (feintes assumées)
 
-- Rendu à ~360 lignes puis upscale `pixelated` : look pixel art et 4 à 6× moins de pixels (réglable dans ⚙ > Rendu).
+- Rendu à 540 lignes avec MSAA, agrandi en douceur : 2 à 3× moins de pixels qu'en natif. À 360 lignes ou moins, agrandissement `pixelated` pour un look pixel art (⚙ > Rendu).
+- Vignettage qui vacille en CSS, par-dessus le canvas : aucun coût de rendu 3D.
 - Pas de shadow map : ombres blob en 1 draw call.
 - Pas de post-process : néons, halos, reflets de flaques et cônes de lumière sont des quads additifs fusionnés.
 - Rim light par patch du shader toon (un seul programme GPU) plutôt que des lumières en plus.

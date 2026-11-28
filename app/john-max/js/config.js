@@ -4,7 +4,7 @@ export const CFG = {
   animSpeed: 1.21,
 
   // Rendu : nombre de lignes à l'écran (0 = résolution native)
-  renderLines: 360,
+  renderLines: 540,
 
   // Temps
   timeScale: 1,

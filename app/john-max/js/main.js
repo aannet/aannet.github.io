@@ -38,13 +38,14 @@ async function boot() {
   const lib = await loadLibrary((k) => progress(0.5 + 0.4 * k, 'Personnages…'));
   progress(0.92, 'Rue…');
 
-  // Rendu en basse résolution puis upscale « pixelated » (CSS) : look pixel art à la Replaced,
-  // et 4 à 6 fois moins de pixels à calculer qu'en natif sur un téléphone récent.
-  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+  // Rendu en résolution réduite (CFG.renderLines) puis agrandi : 2 à 4 fois moins de pixels qu'en natif.
+  // MSAA actif ; à 360 lignes ou moins, agrandissement « pixelated » pour un look pixel art assumé.
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   const applyRes = () => {
     const native = Math.min(window.devicePixelRatio, 2);
     renderer.setPixelRatio(CFG.renderLines > 0 ? Math.min(native, CFG.renderLines / window.innerHeight) : native);
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.domElement.classList.toggle('pixel', CFG.renderLines > 0 && CFG.renderLines <= 360);
   };
   applyRes();
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -184,8 +185,15 @@ async function boot() {
     unlockAudio();
     loader.classList.add('gone');
   };
-  loader.addEventListener('pointerdown', start, { once: true });
-  window.addEventListener('keydown', () => { if (!loader.classList.contains('gone')) start(); }, { once: true });
+  // démarrage uniquement par le bouton (clic, toucher, Entrée/Espace quand il a le focus)
+  const play = document.getElementById('play');
+  play.addEventListener('click', () => { goFullscreen(); start(); }, { once: true });
+  const onKey = (e) => {
+    if (e.code !== 'Enter' && e.code !== 'Space') return;
+    window.removeEventListener('keydown', onKey);
+    play.click();
+  };
+  window.addEventListener('keydown', onKey);
   // Audio débloqué au premier geste, même si l'écran de démarrage a été passé autrement
   window.addEventListener('pointerdown', unlockAudio);
 

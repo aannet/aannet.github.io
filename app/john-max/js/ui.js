@@ -69,7 +69,7 @@ export function buildGui(GUI, game) {
   n.add(CFG, 'enemySpeed', 0.5, 4, 0.1).name('vitesse ennemis');
 
   const r = f('Rendu');
-  r.add(CFG, 'renderLines', { '240 (gros pixels)': 240, '360': 360, '540': 540, 'natif': 0 }).name('résolution').onChange(() => game.applyRes());
+  r.add(CFG, 'renderLines', { '240 (gros pixels)': 240, '360 (pixel art)': 360, '540': 540, '720': 720, 'natif': 0 }).name('résolution').onChange(() => game.applyRes());
 
   const t = f('Temps');
   t.add(CFG, 'timeScale', 0.1, 1.5, 0.05).name('vitesse globale');
