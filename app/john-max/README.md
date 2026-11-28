@@ -23,7 +23,7 @@
 - Décor : un coup fort, la batte ou un ennemi projeté casse les caisses (deux coups légers aussi) ; les poubelles valsent ; un ennemi projeté traverse les vitrines des abribus, qui bloquent le passage tant qu'elles sont intactes. Tout réapparaît après 18 s, quand John est loin.
 - Roulade : direction du stick, invincible sur 75 % de la durée, annule la fin d'un coup ou la charge.
 - Jauge spéciale : se remplit à chaque coup donné (plus avec les coups forts, lancers, Charged Punch) et reçu. Pleine, elle débloque le smash sur UP ; avant, UP est éteint.
-- Smash : uppercut (crochet en lanceur) avec flash plein écran, ralenti, vibration du téléphone ou de la manette, onde de choc ; casse tout le décor cassable dans un rayon de 3 m et fait décoller les ennemis proches.
+- Smash : uppercut (crochet en lanceur) avec flash plein écran, ralenti, vibration du téléphone ou de la manette, onde de choc ; casse tout le décor cassable dans un rayon de 3 m et projette loin les ennemis proches (6 à 7 m, plus fort au contact).
 - Ancien uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
 - La batte est au fond à gauche : marcher dessus pour la prendre. Elle casse au bout de N coups, une autre tombe 5 s plus tard.
 

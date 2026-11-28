@@ -128,6 +128,7 @@ export function buildGui(GUI, game) {
   sp.add(CFG, 'specialHeavy', 0, 40, 1).name('gain coup fort');
   sp.add(CFG, 'specialHurt', 0, 40, 1).name('gain coup reçu');
   sp.add(CFG, 'smashRadius', 1, 6, 0.1).name('rayon du smash (m)');
+  sp.add(CFG, 'smashKnock', 2, 20, 0.5).name('projection du smash');
   sp.add(CFG, 'vibration').name('vibrations');
   sp.add({ go: () => { game.hero.special = 100; } }, 'go').name('remplir la jauge');
 

@@ -85,10 +85,11 @@ export class Hero extends Character {
     for (const e of game.enemies) {
       if (!e.active || e.state === 'enter' || Math.hypot(e.x - this.x, (e.z - this.z) * 1.5) > R) continue;
       const dir = Math.sign(e.x - this.x) || this.facing;
+      const near = 1 - Math.min(1, Math.abs(e.x - this.x) / R) * 0.4; // plus fort au contact
       this.hitSet.add(e);
       e.hp -= 22 * CFG.damageMult;
       e.bowled.clear();
-      e.knock(dir * 2.5, CFG.upperUp * 1.15);
+      e.knock(dir * CFG.smashKnock * near, CFG.upperUp * 1.25);
       game.juice.flash(e.rig);
       game.ui.combo();
       if (e.hp <= 0 && !e.ko) game.onKO(e);

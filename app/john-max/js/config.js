@@ -41,6 +41,7 @@ export const CFG = {
   specialHeavy: 10,
   specialHurt: 10,
   smashRadius: 3,
+  smashKnock: 10,
   vibration: true,
 
   // Uppercut & juggle
