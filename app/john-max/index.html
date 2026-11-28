@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0f1a">
+<link rel="preload" as="image" href="assets/title.jpg">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>John Max</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #fff; --pink: #ff4fa0; --yellow: #ffb35c; --night: #0d0f1a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); color: var(--ink);
+    font-family: 'Bangers', 'Impact', system-ui, sans-serif; letter-spacing: .04em;
+    touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+  #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #app canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+  /* HUD */
+  #hud { position: fixed; inset: 0; pointer-events: none; padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left)); }
+  #hp { position: absolute; top: max(12px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 8px; font-size: 22px; text-shadow: 2px 2px 0 #000; }
+  #hp-bar { width: min(32vw, 240px); height: 16px; background: #1a1020; border: 3px solid #000; border-radius: 3px; overflow: hidden; box-shadow: 3px 3px 0 #000; }
+  #hp-fill { height: 100%; width: 100%; background: linear-gradient(#ffb35c, #e8641c); transition: width .15s; }
+  #ko-count { position: absolute; top: max(12px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 54px); font-size: 22px; text-shadow: 2px 2px 0 #000; }
+  #fps { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font: 11px/1 ui-monospace, monospace; opacity: .55; }
+  #combo { position: absolute; top: 18%; right: 8%; font-size: clamp(30px, 6vw, 56px); color: var(--yellow); -webkit-text-stroke: 2px #000; text-shadow: 4px 4px 0 #000; opacity: 0; transform: rotate(-6deg); }
+  #combo.on { opacity: 1; }
+  #msg { position: absolute; top: 34%; left: 0; right: 0; text-align: center; font-size: clamp(40px, 9vw, 88px); color: #fff; -webkit-text-stroke: 3px #000; text-shadow: 5px 5px 0 var(--pink); opacity: 0; }
+  #msg.on { opacity: 1; }
+  .pop { animation: pop .22s cubic-bezier(.2, 2.2, .4, 1); }
+  @keyframes pop { from { scale: 1.6; } to { scale: 1; } }
+
+  /* Contrôles tactiles */
+  #controls { position: fixed; inset: 0; pointer-events: none; }
+  body.no-touch #controls { display: none; }
+  #stick-zone { position: absolute; left: 0; top: 20%; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
+  #stick-base { position: fixed; width: 116px; height: 116px; margin: -58px 0 0 -58px; border-radius: 50%; border: 3px solid rgba(255,255,255,.35); background: rgba(0,0,0,.18); opacity: 0; transition: opacity .1s; left: 18%; top: 72%; }
+  #stick-base.on { opacity: 1; }
+  #stick-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.75); border: 3px solid #000; transform: translate(-50%, -50%); }
+  #stick-hint { position: absolute; left: 12%; bottom: 16%; width: 96px; height: 96px; border-radius: 50%; border: 3px dashed rgba(255,255,255,.25); }
+  body.stick-used #stick-hint { display: none; }
+  #btn-attack { position: absolute; right: max(7%, env(safe-area-inset-right)); bottom: 14%; width: 104px; height: 104px; border-radius: 50%;
+    background: var(--pink); border: 4px solid #000; box-shadow: 5px 5px 0 #000; color: #fff; font: inherit; font-size: 30px;
+    -webkit-text-stroke: 1.5px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
+  #btn-attack.down, #btn-upper.down { transform: translate(3px, 3px) scale(.94); box-shadow: 2px 2px 0 #000; }
+  #btn-upper { position: absolute; right: calc(max(7%, env(safe-area-inset-right)) + 112px); bottom: calc(14% + 58px); width: 76px; height: 76px; border-radius: 50%;
+    background: #ff8a2a; border: 4px solid #000; box-shadow: 4px 4px 0 #000; color: #fff; font: inherit; font-size: 24px;
+    -webkit-text-stroke: 1.2px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
+  #btn-gui { position: fixed; top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 44px; height: 44px; border-radius: 10px; border: 3px solid #000;
+    background: #fff; color: #000; font: 22px/1 system-ui, sans-serif; box-shadow: 3px 3px 0 #000; z-index: 20; }
+  .lil-gui.autoPlace { position: fixed !important; top: max(60px, env(safe-area-inset-top)) !important; right: max(10px, env(safe-area-inset-right)) !important; max-height: calc(100% - 70px); overflow-y: auto; z-index: 20; font-family: system-ui, sans-serif; letter-spacing: 0; --widget-height: 24px; }
+
+  /* Chargement */
+  #loader { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 12px;
+    padding-top: max(5vh, env(safe-area-inset-top)); text-align: center; transition: opacity .3s;
+    background: #0d0b10 url(assets/title.jpg) center 78% / cover no-repeat; }
+  #loader .panel { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 22px; border-radius: 6px; background: rgba(8, 6, 10, .62); }
+  #loader small { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); text-align: left; max-width: 38vw; }
+  #load-bar { width: min(60vw, 340px); height: 14px; border: 3px solid #000; background: #1a1020; box-shadow: 3px 3px 0 #000; }
+  #load-fill { height: 100%; width: 5%; background: #ff8a2a; transition: width .2s; }
+  #load-txt { font-size: 20px; max-width: min(70vw, 520px); overflow-wrap: anywhere; }
+  #load-txt.err { font: 14px/1.4 system-ui, sans-serif; letter-spacing: 0; color: #ffb35c; }
+  #tap { display: none; font-size: 28px; color: #ffb35c; text-shadow: 2px 2px 0 #000; animation: blink 1s infinite; }
+  #loader.ready #tap { display: block; }
+  #loader.ready #load-bar, #loader.ready #load-txt { display: none; }
+  #loader.gone { opacity: 0; pointer-events: none; }
+  #loader small { font: 12px/1.4 system-ui, sans-serif; opacity: .75; letter-spacing: 0; text-shadow: 1px 1px 0 #000; }
+  @keyframes blink { 50% { opacity: .35; } }
+
+  /* Portrait */
+  #rotate { display: none; position: fixed; inset: 0; z-index: 40; background: var(--night); place-items: center; align-content: center; gap: 16px; text-align: center; font-size: 30px; padding: 24px; }
+  #rotate .phone { width: 60px; height: 100px; border: 5px solid #fff; border-radius: 12px; animation: turn 1.6s ease-in-out infinite; }
+  @keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+  @media (orientation: portrait) and (pointer: coarse) { #rotate { display: grid; } }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+    "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.21.0/dist/lil-gui.esm.min.js",
+    "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.21.0/dist/rapier.mjs"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud">
+  <div id="hp"><span>JOHN MAX</span><div id="hp-bar"><div id="hp-fill"></div></div></div>
+  <div id="ko-count">KO 0</div>
+  <div id="combo"></div>
+  <div id="msg"></div>
+  <div id="fps"></div>
+</div>
+
+<div id="controls">
+  <div id="stick-zone"><div id="stick-hint"></div></div>
+  <div id="stick-base"><div id="stick-knob"></div></div>
+  <button id="btn-attack" aria-label="Frapper">PAF</button>
+  <button id="btn-upper" aria-label="Uppercut">UP</button>
+</div>
+<button id="btn-gui" aria-label="Réglages">⚙</button>
+
+<div id="loader">
+  <div class="panel">
+    <div id="load-bar"><div id="load-fill"></div></div>
+    <div id="load-txt">Chargement…</div>
+    <div id="tap">Touche pour taper</div>
+  </div>
+  <small>Stick à gauche, PAF à droite · manette Bluetooth reconnue au premier bouton<br>Clavier : flèches, J frappe, K uppercut · G pour les réglages</small>
+</div>
+
+<div id="rotate"><div class="phone"></div><div>Tourne ton téléphone</div></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
