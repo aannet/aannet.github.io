@@ -11,10 +11,6 @@ export const FIST_COMBO = [
   { name: 'cross', clip: 'Punch_Cross', speed: 1.3, active: [0.22, 0.34], cancel: 0.36, end: 0.72, tip: 'fistR', r: 0.24, dmg: 10, heavy: false, lunge: 0.7 },
   { name: 'hook', clip: 'Melee_Hook', rec: 'Melee_Hook_Rec', speed: 1.0, active: [0.17, 0.3], cancel: 0.47, tip: 'fistR', r: 0.3, dmg: 24, heavy: true, lunge: 0 },
 ];
-export const BAT_COMBO = [
-  { name: 'swing', clip: 'Sword_Regular_A', rec: 'Sword_Regular_A_Rec', speed: 0.9, active: [0.14, 0.28], cancel: 0.43, tip: 'bat', r: 0.26, dmg: 30, heavy: true, bat: true, lunge: 0.4 },
-  { name: 'backswing', clip: 'Sword_Regular_B', rec: 'Sword_Regular_B_Rec', speed: 0.9, active: [0.15, 0.32], cancel: 0.53, tip: 'bat', r: 0.26, dmg: 30, heavy: true, bat: true, lunge: 0.4 },
-];
 // Lanceur vertical. Pas d'uppercut dans les packs gratuits : le crochet, plus rapide, en tient lieu.
 export const UPPERCUT = { name: 'upper', clip: 'Melee_Hook', rec: 'Melee_Hook_Rec', speed: 1.2, active: [0.15, 0.3], cancel: 0.47, tip: 'fistR', r: 0.32, dmg: 14, heavy: true, launcher: true, lunge: 0.3 };
 
@@ -39,19 +35,20 @@ export function resolveHit(game, A, enemy, point, k = 1) {
   const ko = enemy.hp <= 0;
   const heavy = A.heavy || ko;
 
-  time.hitstop(A.bat ? CFG.hitstopBat : heavy ? CFG.hitstopHeavy : CFG.hitstopLight);
-  juice.shake(heavy ? CFG.shakeHeavy * (A.bat ? 1.3 : 1) : CFG.shakeLight);
-  if (heavy) juice.camPunch(CFG.camPunch * (A.bat ? 1.4 : 1));
+  // armes : hitstop (wh), secousse (ws), projection (wk) et son propres à chaque arme
+  time.hitstop(A.weapon ? A.wh : heavy ? CFG.hitstopHeavy : CFG.hitstopLight);
+  juice.shake((heavy ? CFG.shakeHeavy : CFG.shakeLight) * (A.ws || 1));
+  if (heavy) juice.camPunch(CFG.camPunch * (A.weapon ? 1.4 : 1));
   juice.flash(enemy.rig);
-  juice.hit(point, dir, A.bat ? 2 : heavy ? 1 : 0, enemy.headPos(_l));
-  if (A.bat) sfx.bat(); else sfx.punch(heavy);
+  juice.hit(point, dir, A.weapon ? 2 : heavy ? 1 : 0, enemy.headPos(_l));
+  if (A.weapon) sfx[A.sfx](); else sfx.punch(heavy);
   game.ui.combo();
 
   if (A.launcher) {
     enemy.heavyHit({ x: dir * CFG.upperX, y: CFG.upperUp });
   } else if (heavy) {
-    const m = A.bat ? CFG.batMult : 1;
-    enemy.heavyHit({ x: dir * CFG.knockHeavy * m, y: CFG.knockUp * (A.bat ? 1.25 : 1) * (ko ? 1.15 : 1) });
+    const m = A.wk || 1;
+    enemy.heavyHit({ x: dir * CFG.knockHeavy * m, y: CFG.knockUp * (A.weapon ? 1.2 : 1) * (ko ? 1.15 : 1) });
   } else {
     enemy.lightHit(dir);
   }
@@ -93,7 +90,7 @@ export function resolveThrow(game, enemy, dir) {
 // Coup sur un ennemi en l'air (chute animée) : on le relance (juggle).
 export function resolveJuggle(game, A, enemy, point) {
   const { juice, time, hero } = game;
-  const m = A.bat ? CFG.batMult : 1;
+  const m = A.wk || 1;
   const dir = Math.sign(enemy.x - hero.x) || hero.facing;
   hero.gainSpecial(CFG.specialHit);
   if (A.launcher) enemy.juggle(dir * CFG.upperX, CFG.upperUp * 0.85);
@@ -106,7 +103,7 @@ export function resolveJuggle(game, A, enemy, point) {
   time.hitstop((A.heavy ? CFG.hitstopHeavy : CFG.hitstopLight) * 0.8);
   juice.shake(A.heavy ? CFG.shakeHeavy * 0.8 : CFG.shakeLight);
   juice.flash(enemy.rig);
-  juice.hit(point, Math.sign(point.x - hero.x) || hero.facing, A.bat ? 2 : A.heavy ? 1 : 0, enemy.headPos(_l));
-  if (A.bat) sfx.bat(); else sfx.punch(A.heavy);
+  juice.hit(point, Math.sign(point.x - hero.x) || hero.facing, A.weapon ? 2 : A.heavy ? 1 : 0, enemy.headPos(_l));
+  if (A.weapon) sfx[A.sfx](); else sfx.punch(A.heavy);
   game.ui.combo();
 }

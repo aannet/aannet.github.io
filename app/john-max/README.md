@@ -25,7 +25,8 @@
 - Jauge spéciale : se remplit à chaque coup donné (plus avec les coups forts, lancers, Charged Punch) et reçu. Pleine, elle débloque le smash sur UP ; avant, UP est éteint.
 - Smash : uppercut (crochet en lanceur) avec flash plein écran, ralenti, vibration du téléphone ou de la manette, onde de choc ; casse tout le décor cassable dans un rayon de 3 m et projette loin les ennemis proches (6 à 7 m, plus fort au contact).
 - Ancien uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
-- La batte est au fond à gauche : marcher dessus pour la prendre. Elle casse au bout de N coups, une autre tombe 5 s plus tard.
+- Armes : marcher dessus pour les prendre. Batte (au fond à gauche, lourde), barre de fer (près du départ, rapide, 10 coups), panneau de signalisation (à droite, lent, très large, projette fort, 5 coups). Elles cassent à l'usure ; une du même type retombe 6 s plus tard.
+- Poubelle : frapper à côté d'une poubelle (sans ennemi tout près) la soulève ; frapper la lance devant, UP derrière. En vol, elle renverse les ennemis et casse caisses et vitrines, puis redevient un objet du décor.
 
 ## Panneau de réglages (⚙)
 
@@ -49,7 +50,7 @@ Tout le game feel est réglable en direct : vitesse des animations, hitstop, sha
 | `decor.js` | Habillage Neo-Tokyo : façade peinte, néons en atlas, halos et reflets fusionnés, pluie GPU, vapeur |
 | `blobs.js` | Ombres « blob » instanciées (remplace la shadow map) |
 | `breakables.js` | Décor qui casse : caisses en planches physiques, poubelles qui valsent, vitrines d'abribus qui éclatent, respawn hors champ |
-| `bat.js` | Batte ramassable |
+| `weapons.js` | Armes ramassables (batte, barre de fer, panneau : forme, combo, durabilité), poubelle à soulever et lancer |
 
 ## Choix d'optimisation (feintes assumées)
 

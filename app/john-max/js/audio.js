@@ -183,6 +183,20 @@ export const sfx = {
     noiseBurst(t, 0.9, 260, 0.5, 1, 'lowpass', shaper);
     noiseBurst(t + 0.03, 0.25, 3000, 0.8, 0.6, 'highpass');
   },
+  metal() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.punch(false);
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(1300 * rnd(0.1), t); o.frequency.exponentialRampToValueAtTime(700, t + 0.2);
+    g.gain.setValueAtTime(0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    o.connect(g).connect(master); o.start(t); o.stop(t + 0.37);
+  },
+  sign() {
+    if (!ctx) return;
+    this.bat();
+    this.clang();
+  },
   wood() {
     if (!ctx) return;
     const t = ctx.currentTime;

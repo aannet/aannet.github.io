@@ -95,7 +95,6 @@ export function buildGui(GUI, game) {
   t.add(CFG, 'timeScale', 0.1, 1.5, 0.05).name('vitesse globale');
   t.add(CFG, 'hitstopLight', 0, 0.2, 0.005).name('hitstop léger (s)');
   t.add(CFG, 'hitstopHeavy', 0, 0.3, 0.005).name('hitstop fort (s)');
-  t.add(CFG, 'hitstopBat', 0, 0.3, 0.005).name('hitstop batte (s)');
   t.add(CFG, 'slowmoScale', 0.05, 1, 0.05).name('slow-mo dernier KO');
   t.add(CFG, 'slowmoDuration', 0, 2, 0.05).name('durée slow-mo (s)');
 
@@ -110,7 +109,6 @@ export function buildGui(GUI, game) {
   k.add(CFG, 'knockLight', 0, 6, 0.1).name('recul coup léger');
   k.add(CFG, 'knockHeavy', 0, 20, 0.1).name('impulsion coup fort');
   k.add(CFG, 'knockUp', 0, 10, 0.1).name('impulsion verticale');
-  k.add(CFG, 'batMult', 1, 4, 0.1).name('multiplicateur batte');
   k.add(CFG, 'groundDrag', 0, 15, 0.5).name('frottement au sol');
   k.add(CFG, 'gravity', 5, 25, 0.5).name('gravité').onChange((v) => { game.world.gravity = { x: 0, y: -v, z: 0 }; });
   k.add(CFG, 'bowling').name('un projeté renverse les autres');
@@ -150,9 +148,10 @@ export function buildGui(GUI, game) {
   cb.add(CFG, 'enemyAggro', 0.3, 3, 0.1).name('agressivité');
   cb.add(CFG, 'heroInvincible').name('héros invincible');
 
-  const b = f('Batte');
-  b.add(CFG, 'batDurability', 1, 30, 1).name('coups avant casse');
-  b.add({ go: () => game.bat.forceRespawn() }, 'go').name('faire tomber une batte');
+  const b = f('Armes');
+  b.add(CFG, 'durabilityMult', 0.2, 5, 0.1).name('durabilité ×');
+  b.add(CFG, 'canThrowV', 4, 20, 0.5).name('force lancer poubelle');
+  for (const [t, n] of [['bat', 'batte'], ['pipe', 'barre de fer'], ['sign', 'panneau']]) b.add({ go: () => game.weapons.dropNear(t) }, 'go').name('faire tomber : ' + n);
 
   const d = f('Scène');
   d.add({ go: () => game.level.resetProps() }, 'go').name('replacer le décor');

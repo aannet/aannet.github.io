@@ -176,6 +176,18 @@ export class Breakables {
     }
   }
 
+  // Projectile (poubelle lancée) : casse caisses et vitrines qu'il traverse
+  sweepPoint(t, dir, done) {
+    for (const g of this.glass) {
+      if (g.intact && t.z > g.z0 - 0.25 && t.z < g.z1 + 0.25 && t.y < 2 && Math.abs(t.x - g.x) < 0.35) this.shatterGlass(g, dir);
+    }
+    for (const p of [...this.level.props]) {
+      if (done.has(p) || p.kind !== 'crate') continue;
+      const c = p.body.translation();
+      if (Math.hypot(c.x - t.x, c.z - t.z) < 0.55 && Math.abs(c.y - t.y) < 0.6) { done.add(p); this.breakCrate(p, dir); }
+    }
+  }
+
   removeDebris(d) {
     this.game.scene.remove(d.m);
     this.game.world.removeRigidBody(d.b);

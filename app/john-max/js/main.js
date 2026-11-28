@@ -6,7 +6,7 @@ import { Juice } from './juice.js';
 import { Level, ARENA } from './level.js';
 import { Hero } from './hero.js';
 import { Enemy } from './enemy.js';
-import { Bat } from './bat.js';
+import { Weapons } from './weapons.js';
 import { Blobs } from './blobs.js';
 import { UI, buildGui, loadSavedCfg } from './ui.js';
 import { unlockAudio, sfx } from './audio.js';
@@ -64,7 +64,7 @@ async function boot() {
   game.level = new Level(game);
   game.hero = new Hero(game);
   game.enemies = [new Enemy(game, 0), new Enemy(game, 1)];
-  game.bat = new Bat(game);
+  game.weapons = new Weapons(game);
   game.blobs = new Blobs(scene);
 
   game.onKO = (enemy) => {
@@ -155,7 +155,7 @@ async function boot() {
     world.step();
     bowling();
     game.level.sync(gdt);
-    game.bat.update(gdt);
+    game.weapons.update(gdt);
   }
 
   let last = performance.now();

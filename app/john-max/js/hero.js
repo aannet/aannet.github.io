@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { Character } from './character.js';
-import { FIST_COMBO, BAT_COMBO, SMASH, CHARGED, AIR_STRIKE, resolveHit, resolveJuggle, resolveThrow } from './combat.js';
+import { FIST_COMBO, SMASH, CHARGED, AIR_STRIKE, resolveHit, resolveJuggle, resolveThrow } from './combat.js';
 import { sfx } from './audio.js';
 
 const _p = new THREE.Vector3();
@@ -24,7 +24,8 @@ export class Hero extends Character {
     this.phase = 'main';
     this.hitSet = new Set();
     this.invuln = 0;
-    this.bat = null;
+    this.weapon = null; // arme en main (weapons.js)
+    this.carrying = null; // poubelle soulevée
     this.hitPoints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     this.chargeT = 0;
     this.chargeK = 0;
@@ -35,7 +36,7 @@ export class Hero extends Character {
   }
 
   combo() {
-    return this.bat ? BAT_COMBO : FIST_COMBO;
+    return this.weapon ? this.weapon.def.combo : FIST_COMBO;
   }
 
   // move : attaque hors combo (uppercut). Le coup suivant repart alors du début du combo.
@@ -139,6 +140,20 @@ export class Hero extends Character {
     this.setState('air');
   }
 
+  startLift(can) {
+    this.game.weapons.lift(this, can);
+    this.anim('Walk_Carry_Loop', { fade: 0.1, restart: true, speed: 0 });
+    this.setState('carry');
+  }
+
+  dropCarried() {
+    if (this.carrying) this.game.weapons.drop(this);
+  }
+
+  enemyClose(d) {
+    return this.game.enemies.some((e) => e.hittable() && (e.x - this.x) * this.facing > -0.2 && Math.abs(e.x - this.x) < d && Math.abs(e.z - this.z) < 0.5);
+  }
+
   // Saisie : John tient l'ennemi au col, bras tendus (pose de portage)
   startGrab(e) {
     this.held = e;
@@ -182,6 +197,7 @@ export class Hero extends Character {
   hurt(dir) {
     if (this.invuln > 0 || this.state === 'hurt') return false;
     if (this.held) this.release();
+    this.dropCarried();
     this.gainSpecial(CFG.specialHurt);
     if (this.state === 'charge') this.stopCharge();
     const { juice } = this.game;
@@ -222,7 +238,7 @@ export class Hero extends Character {
         this.anim('Jog_Fwd_Loop', { fade: 0.15, speed: Math.max(0.6, v / (JOG_SPEED * CFG.animSpeed)) });
         lean = -mz * 0.6;
       } else {
-        this.anim(this.bat ? 'Sword_Idle' : 'Guard', { fade: 0.2, speed: this.bat ? 1 : 0, loop: true });
+        this.anim(this.weapon ? this.weapon.def.idle : 'Guard', { fade: 0.2, speed: this.weapon ? 1 : 0, loop: true });
       }
       // saisie : pousser le stick contre un ennemi debout
       const grabTarget = this.grabCandidate(mx);
@@ -231,8 +247,11 @@ export class Hero extends Character {
       else if (input.take('jump', CFG.inputBuffer)) this.startJump();
       else if (input.take('dodge', CFG.inputBuffer)) this.startDodge();
       else if (input.take('upper', CFG.inputBuffer)) this.tryUpper();
-      else if (input.take('attack', CFG.inputBuffer)) this.startAttack(0);
-      else if (input.heldFor('attack') > CFG.chargeDelay) this.startCharge();
+      else if (input.take('attack', CFG.inputBuffer)) {
+        // à côté d'une poubelle, sans ennemi juste devant : on la soulève
+        const can = !this.weapon && this.game.weapons.canNear(this);
+        if (can && !this.enemyClose(1.3)) this.startLift(can); else this.startAttack(0);
+      } else if (input.heldFor('attack') > CFG.chargeDelay) this.startCharge();
     }
 
     if (this.state === 'attack') this.updateAttack(dt);
@@ -286,8 +305,25 @@ export class Hero extends Character {
       else if (this.t > CFG.grabTime) this.release(), this.setState('free');
     }
 
+    if (this.state === 'carry') {
+      const sp = CFG.heroSpeed * 0.65;
+      const dx = input.move.x * sp * dt, dz = input.move.z * sp * 0.7 * dt;
+      this.x += dx; this.z += dz;
+      if (Math.abs(input.move.x) > 0.3) this.facing = Math.sign(input.move.x);
+      const v = Math.hypot(dx, dz) / dt;
+      this.anim('Walk_Carry_Loop', { speed: v > 0.2 ? v / (1.4 * CFG.animSpeed) : 0 });
+      if (input.take('attack', CFG.inputBuffer)) this.startThrow(this.facing);
+      else if (input.take('upper', CFG.inputBuffer)) this.startThrow(-this.facing);
+      else if (input.take('jump', CFG.inputBuffer)) { this.dropCarried(); this.startJump(); }
+      else if (input.take('dodge', CFG.inputBuffer)) { this.dropCarried(); this.startDodge(); }
+    }
+
     if (this.state === 'throw') {
       const act = this.model.actions.OverhandThrow;
+      if (this.carrying && act.time >= THROW_RELEASE) {
+        if (this.throwDir !== this.facing) this.facing = this.throwDir;
+        this.game.weapons.throwCan(this, this.throwDir);
+      }
       if (this.held && act.time >= THROW_RELEASE) {
         if (this.throwDir !== this.facing) this.facing = this.throwDir; // lancer derrière : John se retourne
         const e = this.held;
@@ -366,7 +402,7 @@ export class Hero extends Character {
 
   // Ennemi debout, juste devant, vers qui on pousse le stick
   grabCandidate(mx) {
-    if (this.bat || Math.abs(mx) < 0.5) return null;
+    if (this.weapon || this.carrying || Math.abs(mx) < 0.5) return null;
     for (const e of this.game.enemies) {
       if (!e.hittable() || e.state === 'attack') continue;
       const dx = e.x - this.x;
@@ -392,14 +428,14 @@ export class Hero extends Character {
   }
 
   points(A) {
-    if (A.tip === 'bat') return this.bat ? this.bat.points(this.hitPoints) : [];
+    if (A.tip === 'weapon') return this.weapon ? this.weapon.points(this.hitPoints) : [];
     this.tip(A.tip, this.hitPoints[0]);
     return [this.hitPoints[0]];
   }
 
   testHits(A) {
     const pts = this.points(A);
-    if (this.game.level.breakables.hitProps(pts, A.r, this.facing, A.heavy || !!A.bat, this.hitSet) && A.bat && this.bat) this.bat.used();
+    if (this.game.level.breakables.hitProps(pts, A.r, this.facing, A.heavy || !!A.weapon, this.hitSet) && A.weapon && this.weapon) this.weapon.used();
     for (const e of this.game.enemies) {
       if (this.hitSet.has(e) || !e.active) continue;
       const air = e.airborne();
@@ -407,14 +443,14 @@ export class Hero extends Character {
       if ((e.x - this.x) * this.facing < -0.25) continue;
       for (const p of pts) {
         if (air) {
-          if (e.hurtDist(p) < A.r + 0.4 && Math.abs(e.z - this.z) < 0.8) { this.hitSet.add(e); resolveJuggle(this.game, A, e, _p.copy(p)); if (A.bat && this.bat) this.bat.used(); break; }
+          if (e.hurtDist(p) < A.r + 0.4 && Math.abs(e.z - this.z) < 0.8) { this.hitSet.add(e); resolveJuggle(this.game, A, e, _p.copy(p)); if (A.weapon && this.weapon) this.weapon.used(); break; }
           continue;
         }
         if (e.hurtDist(p) < A.r + 0.28 && Math.abs(e.z - this.z) < 0.7) {
           this.hitSet.add(e);
           _p.copy(p);
           resolveHit(this.game, A, e, _p);
-          if (A.bat && this.bat) this.bat.used();
+          if (A.weapon && this.weapon) this.weapon.used();
           break;
         }
       }

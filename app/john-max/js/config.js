@@ -10,7 +10,6 @@ export const CFG = {
   timeScale: 1,
   hitstopLight: 0.055,
   hitstopHeavy: 0.11,
-  hitstopBat: 0.14,
   slowmoScale: 0.2,
   slowmoDuration: 0.9,
 
@@ -29,7 +28,6 @@ export const CFG = {
   knockLight: 2.2,
   knockHeavy: 4.5,
   knockUp: 4.5,
-  batMult: 1.2,
   groundDrag: 5,
   gravity: 13,
 
@@ -78,8 +76,9 @@ export const CFG = {
   enemySpeed: 2.05,
   enemyAggro: 1,
 
-  // Batte
-  batDurability: 6,
+  // Armes et objets à lancer
+  durabilityMult: 1,
+  canThrowV: 11,
 };
 
 // Groupes de collision Rapier : (membership << 16) | filter

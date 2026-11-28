@@ -38,11 +38,13 @@ export class Blobs {
       const t = p.body.translation();
       this.set(i++, t.x, t.z, 0.75, Math.max(0, t.y - 0.3));
     }
-    const bat = game.bat;
-    if (bat.state === 'ground' && bat.body) {
-      const t = bat.body.translation();
+    for (const w of game.weapons.items) {
+      if (w.state !== 'ground' || !w.body) continue;
+      const t = w.body.translation();
       this.set(i++, t.x, t.z, 0.8, t.y);
     }
+    const f = game.weapons.flying;
+    if (f) { const t = f.p.body.translation(); this.set(i++, t.x, t.z, 0.7, t.y); }
     this.mesh.count = Math.min(i, MAX);
     this.mesh.instanceMatrix.needsUpdate = true;
   }
