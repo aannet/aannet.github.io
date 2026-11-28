@@ -103,11 +103,13 @@ export function buildGui(GUI, game) {
   u.add(CFG, 'juggleUp', 0, 10, 0.1).name('relance en l\'air');
   u.add(CFG, 'juggleX', 0, 6, 0.1).name('poussée en l\'air');
 
-  const ch = f('Charged Punch & esquive');
+  const ch = f('Charged Punch, saut, esquive');
   ch.add(CFG, 'chargeDelay', 0.1, 0.6, 0.01).name('appui avant charge (s)');
   ch.add(CFG, 'chargeFull', 0.3, 2, 0.05).name('durée charge pleine (s)');
   ch.add(CFG, 'chargeKnock', 0, 5, 0.1).name('projection chargée ×');
   ch.add(CFG, 'chargeWave', 0, 5, 0.1).name('portée onde de choc (m)');
+  ch.add(CFG, 'jumpV', 3, 10, 0.1).name('impulsion saut');
+  ch.add(CFG, 'airControl', 0, 1.2, 0.05).name('contrôle en l\'air');
   ch.add(CFG, 'dodgeDist', 1, 5, 0.1).name('distance roulade (m)');
   ch.add(CFG, 'dodgeInvuln', 0, 1, 0.05).name('part invincible');
 

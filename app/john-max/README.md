@@ -11,12 +11,14 @@
 
 ## Contrôles
 
-- Tactile : stick virtuel n'importe où sur la moitié gauche, bouton PAF à droite.
+- Toutes les commandes sont listées dans le bouton AIDE de l'accueil.
+- Tactile : stick virtuel n'importe où sur la moitié gauche, bouton PAF à droite, SAUT (vert).
 - Tactile : bouton UP (orange) pour l'uppercut, ESQ (bleu) pour la roulade. PAF maintenu : Charged Punch.
-- Manette Bluetooth : reconnue au premier bouton. Stick gauche ou croix, A/X pour frapper, Y pour l'uppercut, B ou RB pour la roulade, A maintenu pour le Charged Punch, Start pour les réglages.
-- Clavier : flèches ou ZQSD/WASD, J/Espace pour frapper, K pour l'uppercut, L ou Maj pour la roulade, J maintenu pour le Charged Punch, G pour les réglages.
+- Manette Bluetooth : reconnue au premier bouton. Stick gauche ou croix, X frapper (maintenu : Charged Punch), Y uppercut, A saut, B ou RB roulade, Start réglages.
+- Clavier : flèches ou ZQSD/WASD, J frapper (maintenu : Charged Punch), K uppercut, Espace saut, L ou Maj roulade, G réglages.
 - Combo : jab, cross, crochet (le 3e coup projette l'ennemi). Avec la batte : 2 swings lourds.
 - Charged Punch : PAF maintenu. John se fige épaule en arrière, l'énergie orange monte au poing (halo, étincelles aspirées, zoom), puis le cross part au relâchement. Dégâts, projection et onde de choc à distance selon la charge ; ralenti à pleine charge.
+- Saut : contrôle réduit en l'air, un coup aérien par saut (fait tomber, rattrape les ennemis en l'air).
 - Roulade : direction du stick, invincible sur 75 % de la durée, annule la fin d'un coup ou la charge.
 - Uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
 - La batte est au fond à gauche : marcher dessus pour la prendre. Elle casse au bout de N coups, une autre tombe 5 s plus tard.

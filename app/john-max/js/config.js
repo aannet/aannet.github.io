@@ -48,6 +48,10 @@ export const CFG = {
   chargeKnock: 1.6,
   chargeWave: 2.6,
 
+  // Saut
+  jumpV: 6.2,
+  airControl: 0.8,
+
   // Esquive (roulade)
   dodgeDist: 2.8,
   dodgeInvuln: 0.75,

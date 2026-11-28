@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { Character } from './character.js';
-import { FIST_COMBO, BAT_COMBO, UPPERCUT, CHARGED, resolveHit, resolveJuggle } from './combat.js';
+import { FIST_COMBO, BAT_COMBO, UPPERCUT, CHARGED, AIR_STRIKE, resolveHit, resolveJuggle } from './combat.js';
 import { sfx } from './audio.js';
 
 const _p = new THREE.Vector3();
@@ -80,6 +80,18 @@ export class Hero extends Character {
     this.setState('dodge');
   }
 
+  // Saut : impulsion (Jump_Start dès la détente), pose en l'air (Jump_Loop), réception (Jump_Land)
+  startJump() {
+    this.vy = CFG.jumpV;
+    this.y = 0.01;
+    this.A = null;
+    this.airUsed = false;
+    this.anim('Jump_Start', { fade: 0.05, restart: true, from: 0.06, speed: 1.6 });
+    sfx.whoosh(false);
+    this.game.juice.dust(this.x, this.z, 0.3);
+    this.setState('air');
+  }
+
   hurt(dir) {
     if (this.invuln > 0 || this.state === 'hurt') return false;
     if (this.state === 'charge') this.stopCharge();
@@ -123,13 +135,54 @@ export class Hero extends Character {
       } else {
         this.anim(this.bat ? 'Sword_Idle' : 'Guard', { fade: 0.2, speed: this.bat ? 1 : 0, loop: true });
       }
-      if (input.take('dodge', CFG.inputBuffer)) this.startDodge();
+      if (input.take('jump', CFG.inputBuffer)) this.startJump();
+      else if (input.take('dodge', CFG.inputBuffer)) this.startDodge();
       else if (input.take('upper', CFG.inputBuffer)) this.startAttack(0, UPPERCUT);
       else if (input.take('attack', CFG.inputBuffer)) this.startAttack(0);
       else if (input.heldFor('attack') > CFG.chargeDelay) this.startCharge();
     }
 
     if (this.state === 'attack') this.updateAttack(dt);
+
+    if (this.state === 'air') {
+      // contrôle en l'air, réduit
+      const sp = CFG.heroSpeed * CFG.airControl;
+      this.x += input.move.x * sp * dt;
+      this.z += input.move.z * sp * 0.7 * dt;
+      if (!this.A && Math.abs(input.move.x) > 0.15) this.facing = Math.sign(input.move.x);
+      this.vy -= CFG.gravity * dt;
+      this.y += this.vy * dt;
+      if (!this.airUsed && input.take('attack', CFG.inputBuffer)) {
+        this.airUsed = true;
+        this.A = AIR_STRIKE;
+        this.phase = 'main';
+        this.hitSet.clear();
+        this.anim(AIR_STRIKE.clip, { fade: 0.05, restart: true, from: AIR_STRIKE.from, speed: AIR_STRIKE.speed });
+        sfx.whoosh(true);
+      }
+      if (this.A) {
+        const act = this.model.actions[this.A.clip];
+        if (act.time >= this.A.hold) act.timeScale = 0; // poing tendu jusqu'au sol
+      } else if (this.vy < 1.5) this.anim('Jump_Loop', { fade: 0.2 });
+      if (this.y <= 0) {
+        this.y = 0;
+        this.vy = 0;
+        this.A = null;
+        this.anim('Jump_Land', { fade: 0.04, restart: true, speed: 1.8 });
+        this.game.juice.dust(this.x, this.z, 0.5);
+        sfx.thud(0.4);
+        this.setState('land');
+      }
+    }
+
+    if (this.state === 'land' && this.t >= 0.12) this.setState('free');
+
+    // retombée si un coup le surprend en l'air
+    if (this.state !== 'air' && this.y > 0) {
+      this.vy -= CFG.gravity * dt;
+      this.y = Math.max(0, this.y + this.vy * dt);
+      if (this.y === 0) this.vy = 0;
+    }
 
     if (this.state === 'charge') {
       this.chargeT += dt;
@@ -155,8 +208,8 @@ export class Hero extends Character {
     this.clampArena();
     this.step(dt, lean);
 
-    // hitbox active seulement sur la fenêtre utile du clip
-    if (this.state === 'attack' && this.phase === 'main') {
+    // hitbox active seulement sur la fenêtre utile du clip (au sol ou coup aérien)
+    if ((this.state === 'attack' && this.phase === 'main') || (this.state === 'air' && this.A)) {
       const ct = this.model.actions[this.A.clip].time;
       if (ct >= this.A.active[0] && ct <= this.A.active[1]) {
         if (this.A.charged && !this.waveDone) this.shockwave();
@@ -177,6 +230,7 @@ export class Hero extends Character {
     if (!A.charged && input.heldFor('attack') > CFG.chargeDelay) return this.startCharge();
     const canCancel = this.phase === 'rec' || ct >= A.cancel;
     if (canCancel && input.take('dodge', CFG.inputBuffer)) return this.startDodge();
+    if (canCancel && input.take('jump', CFG.inputBuffer)) return this.startJump();
     if (canCancel && A !== UPPERCUT && input.take('upper', CFG.inputBuffer)) return this.startAttack(0, UPPERCUT);
     if (canCancel && input.take('attack', CFG.inputBuffer)) return this.startAttack(this.comboStep + 1);
     if (this.phase === 'main') {

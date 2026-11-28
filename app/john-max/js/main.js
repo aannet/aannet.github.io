@@ -185,11 +185,19 @@ async function boot() {
     unlockAudio();
     loader.classList.add('gone');
   };
+  // aide : panneau des commandes, fermé par ✕, Échap ou un toucher hors de la carte
+  const help = document.getElementById('help');
+  const openHelp = (on) => help.classList.toggle('on', on);
+  document.getElementById('help-btn').addEventListener('click', () => openHelp(true));
+  help.querySelector('.close').addEventListener('click', () => openHelp(false));
+  help.addEventListener('click', (e) => { if (e.target === help) openHelp(false); });
+  window.addEventListener('keydown', (e) => { if (e.code === 'Escape') openHelp(false); });
+
   // démarrage uniquement par le bouton (clic, toucher, Entrée/Espace quand il a le focus)
   const play = document.getElementById('play');
   play.addEventListener('click', () => { goFullscreen(); start(); }, { once: true });
   const onKey = (e) => {
-    if (e.code !== 'Enter' && e.code !== 'Space') return;
+    if ((e.code !== 'Enter' && e.code !== 'Space') || help.classList.contains('on')) return;
     window.removeEventListener('keydown', onKey);
     play.click();
   };

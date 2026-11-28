@@ -56,7 +56,8 @@ export class Input {
   }
 
   _bindKeyboard() {
-    const atk = ['KeyJ', 'Space', 'KeyX', 'Enter'];
+    const atk = ['KeyJ', 'KeyX'];
+    const jmp = ['Space'];
     const upr = ['KeyK', 'KeyI', 'KeyC'];
     const dge = ['KeyL', 'ShiftLeft', 'ShiftRight', 'KeyV'];
     window.addEventListener('keydown', (e) => {
@@ -70,6 +71,7 @@ export class Input {
       }
       if (upr.includes(e.code)) this.press('upper');
       if (dge.includes(e.code)) this.press('dodge');
+      if (jmp.includes(e.code)) { this.press('jump'); e.preventDefault(); }
       if (e.code === 'Backquote' || e.code === 'KeyG') this.onMenu && this.onMenu();
     });
     window.addEventListener('keyup', (e) => {
@@ -136,6 +138,7 @@ export class Input {
     bindButton(btn, 'attack');
     bindButton(document.getElementById('btn-upper'), 'upper');
     bindButton(document.getElementById('btn-dodge'), 'dodge');
+    bindButton(document.getElementById('btn-jump'), 'jump');
 
     // Un toucher n'importe où repasse en mode tactile
     window.addEventListener('touchstart', () => this._setMode('touch'), { passive: true });
@@ -152,13 +155,15 @@ export class Input {
       b.forEach((p, i) => {
         if (p && !prev[i]) {
           any = true;
-          if (i === 0 || i === 2) this.press('attack');
+          // A saute, X frappe (maintenu : charge), Y uppercut, B / RB roulade, Start réglages
+          if (i === 0) this.press('jump');
+          if (i === 2) this.press('attack');
           if (i === 3) this.press('upper');
           if (i === 1 || i === 5) this.press('dodge');
           if (i === 9 && this.onMenu) this.onMenu();
         }
       });
-      this.hold('attack', 'gp' + gp.index, b[0] || b[2]);
+      this.hold('attack', 'gp' + gp.index, b[2]);
       this.gpPrev[gp.index] = b;
       let ax = gp.axes[0] || 0, az = gp.axes[1] || 0;
       if (Math.hypot(ax, az) < DEAD) ax = az = 0;

@@ -18,6 +18,9 @@ export const BAT_COMBO = [
 // Lanceur vertical. Pas d'uppercut dans les packs gratuits : le crochet, plus rapide, en tient lieu.
 export const UPPERCUT = { name: 'upper', clip: 'Melee_Hook', rec: 'Melee_Hook_Rec', speed: 1.2, active: [0.15, 0.3], cancel: 0.47, tip: 'fistR', r: 0.32, dmg: 14, heavy: true, launcher: true, lunge: 0.3 };
 
+// Coup aérien : le cross part de sa préparation puis reste tendu (hold) et actif jusqu'à la réception.
+export const AIR_STRIKE = { name: 'air', clip: 'Punch_Cross', from: 0.1, speed: 1.7, active: [0.18, 0.4], hold: 0.3, cancel: 9, tip: 'fistR', r: 0.36, dmg: 14, heavy: true, lunge: 0 };
+
 // Charged Punch : le cross repart de sa frame de préparation (0,1 s), plus vite et avec une grosse fenêtre.
 export const CHARGED = { name: 'charged', clip: 'Punch_Cross', from: 0.1, speed: 1.5, active: [0.2, 0.38], cancel: 0.62, end: 0.82, tip: 'fistR', r: 0.42, dmg: 20, heavy: true, charged: true, lunge: 2.4 };
 
