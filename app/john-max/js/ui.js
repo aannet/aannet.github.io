@@ -1,5 +1,8 @@
 import { CFG } from './config.js';
 
+const POP = [{ scale: 1.5, filter: 'blur(2px)' }, { scale: 1, filter: 'none' }];
+const POP_T = { duration: 220, easing: 'cubic-bezier(.2, 2.2, .4, 1)' };
+
 // HUD DOM : vie du héros, compteur de combo, messages, fps. Panneau de debug lil-gui.
 export class UI {
   constructor(game) {
@@ -32,9 +35,7 @@ export class UI {
     this.comboT = 1.3;
     if (this.comboN >= 2) {
       this.comboNEl.textContent = `X${this.comboN} COMBO`;
-      this.comboNEl.classList.remove('pop');
-      void this.comboNEl.offsetWidth;
-      this.comboNEl.classList.add('pop');
+      this.comboNEl.animate(POP, POP_T); // Web Animations : pas de reflow forcé à chaque coup
       this.comboEl.classList.add('on');
     }
   }
@@ -68,15 +69,15 @@ export class UI {
     const h = this.game.hero;
     // le DOM n'est touché que si la valeur change
     const hp = Math.max(0, Math.round((h.hp / h.maxHp) * 100));
-    if (hp !== this.lastHp) { this.lastHp = hp; this.hpFill.style.width = hp + '%'; this.hpPct.textContent = `HP ${hp}%`; }
+    if (hp !== this.lastHp) { this.lastHp = hp; this.hpFill.style.transform = `scaleX(${hp / 100})`; this.hpPct.textContent = `HP ${hp}%`; }
     const sp = Math.round(h.special);
     const ready = h.special >= 100;
-    if (sp !== this.lastSp) { this.lastSp = sp; this.spFill.style.width = sp + '%'; this.spLbl.innerHTML = ready ? 'MAX<br>READY' : sp + '%'; }
+    if (sp !== this.lastSp) { this.lastSp = sp; this.spFill.style.transform = `scaleX(${sp / 100})`; this.spLbl.innerHTML = ready ? 'MAX<br>READY' : sp + '%'; }
     this.status.classList.toggle('ready', ready);
     this.upBtn.classList.toggle('ready', ready);
     this.comboT -= dt;
     if (this.comboT <= 0) this.comboEl.classList.remove('on');
-    else this.comboFill.style.width = `${(this.comboT / 1.3) * 100}%`;
+    else this.comboFill.style.transform = `scaleX(${this.comboT / 1.3})`;
     this.msgT -= dt;
     if (this.msgT <= 0) this.msgEl.classList.remove('on');
     this.frames++;
@@ -171,7 +172,11 @@ export function buildGui(GUI, game) {
 
   const d = f('Scène');
   d.add({ go: () => game.level.resetProps() }, 'go').name('replacer le décor');
-  d.add({ go: () => game.enemies.forEach((e) => e.respawn()) }, 'go').name('respawn ennemis');
+  d.add({ go: () => { // relance la vague en cours (sans passer par la victoire si le boss est là)
+    const s = game.stage;
+    for (const e of [...game.enemies]) { e.deactivate(); game.enemies.splice(game.enemies.indexOf(e), 1); }
+    if (s.zone >= 0) { s.queue.length = 0; s.state = 'fight'; s.wave = 0; s.queueWave(); }
+  } }, 'go').name('relancer la vague');
   d.add({ go: () => { try { localStorage.setItem('btaCfg2', JSON.stringify(CFG)); game.ui.message('Réglages gardés', 0.8); } catch (e) {} } }, 'go').name('garder ces réglages');
   d.add({ go: () => { navigator.clipboard?.writeText(JSON.stringify(CFG, null, 2)).then(() => game.ui.message('Copié', 0.8)).catch(() => {}); } }, 'go').name('copier les réglages (JSON)');
   d.add({ go: () => { try { localStorage.removeItem('btaCfg2'); } catch (e) {} location.reload(); } }, 'go').name('réglages par défaut');

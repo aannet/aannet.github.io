@@ -93,6 +93,7 @@ export class Hero extends Character {
       this.hitSet.add(e);
       e.hp -= CFG.smashDmg * CFG.damageMult;
       e.bowled.clear();
+      e.releaseToken();
       e.knock(dir * CFG.smashKnock * near, CFG.upperUp * 1.25);
       game.juice.flash(e.rig);
       game.juice.sparks(e.headPos(_p), dir, 8 * CFG.particles, 1.5, [0.5, 0.9, 1]);
@@ -170,6 +171,7 @@ export class Hero extends Character {
 
   release() {
     if (!this.held) return;
+    if (this.held.ko || this.held.state !== 'grabbed') { this.held = null; return; }
     this.held.released(this.facing);
     this.held = null;
   }
@@ -234,7 +236,7 @@ export class Hero extends Character {
     this.vy = 3.6;
     this.y = Math.max(this.y, 0.01);
     this.facing = -dir;
-    this.invuln = 99;
+    this.invuln = 0; // au sol, hurt() ignore déjà les coups (états knock/down/getup)
     this.anim('Hit_Knockback', { fade: 0.04, restart: true, speed: 1.1 });
     this.game.juice.shake(0.5);
     this.game.time.hitstop(0.1);
@@ -380,7 +382,7 @@ export class Hero extends Character {
     }
     if (this.state === 'getup') {
       const a = this.model.actions.LayToIdle;
-      this.invuln = 1;
+      this.invuln = Math.max(this.invuln, 1);
       if (!a.isRunning() || a.time >= a.getClip().duration - 0.05) this.setState('free');
     }
 

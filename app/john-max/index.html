@@ -61,13 +61,14 @@
   #status .row.sp em { font-size: 9px; line-height: 1.05; color: #bdf3ff; }
   /* barres en segments obliques */
   .seg { position: relative; flex: 1; height: 12px; background: rgba(255,255,255,.06); }
-  .seg > div { height: 100%; transition: width .15s; }
+  .seg > div { width: 100%; height: 100%; transform-origin: left; transition: transform .15s; } /* remplissage par scaleX */
   .seg::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, transparent 0 9px, rgba(8,7,14,.95) 9px 12px); }
-  #hp-fill { width: 100%; background: linear-gradient(90deg, #ff4a1a, #ff8a3c 60%, #ffc070); box-shadow: 0 0 8px var(--neon); }
-  #sp-fill { width: 0; background: linear-gradient(90deg, #12a7d8, var(--cyan) 70%, #b8f6ff); box-shadow: 0 0 8px var(--cyan); }
+  #hp-fill { background: linear-gradient(90deg, #ff4a1a, #ff8a3c 60%, #ffc070); box-shadow: 0 0 8px var(--neon); }
+  #sp-fill { transform: scaleX(0); background: linear-gradient(90deg, #12a7d8, var(--cyan) 70%, #b8f6ff); box-shadow: 0 0 8px var(--cyan); }
   #status.ready #sp-fill { animation: spPulse .6s infinite alternate; }
+  /* pulsations en opacité (composée) : un filtre animé sous un parent à drop-shadow repeindrait tout */
   #status.denied { animation: denied .3s; }
-  @keyframes spPulse { to { filter: brightness(1.6); } }
+  @keyframes spPulse { to { opacity: .55; } }
   @keyframes denied { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
 
   /* haut droit : stage + KO, pause, réglages */
@@ -85,7 +86,7 @@
   #combo.on { opacity: 1; }
   #combo b { display: block; margin-bottom: 3px; font: 600 13px/1 'Oswald', sans-serif; letter-spacing: .1em; color: #ffd8b8; text-shadow: 0 0 6px rgba(255,138,60,.8); }
   #combo .seg { height: 9px; outline: 1px solid rgba(255,138,60,.7); outline-offset: 1px; }
-  #combo .seg > div { width: 100%; background: linear-gradient(90deg, #ff6a24, #ffb35c); transition: none; }
+  #combo .seg > div { background: linear-gradient(90deg, #ff6a24, #ffb35c); transition: none; }
 
   /* GO : la zone suivante est ouverte */
   #go { position: absolute; right: max(4%, env(safe-area-inset-right)); top: 34%; display: none; align-items: center; gap: 6px;
@@ -100,7 +101,7 @@
   #boss .frame { --fc: var(--hot); --k: 10px; display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 12px; }
   #boss b { font: 400 16px/1 'Russo One', sans-serif; letter-spacing: .1em; color: #ffd0dc; }
   #boss .seg { height: 12px; }
-  #boss-fill { width: 100%; background: linear-gradient(90deg, #a01838, var(--hot) 60%, #ff9ab0); box-shadow: 0 0 8px var(--hot); }
+  #boss-fill { background: linear-gradient(90deg, #a01838, var(--hot) 60%, #ff9ab0); box-shadow: 0 0 8px var(--hot); }
   #msg { position: absolute; top: 33%; left: 0; right: 0; text-align: center; font: 400 clamp(34px, 8vw, 76px)/1 'Russo One', sans-serif; color: #fff; letter-spacing: .06em;
     text-shadow: 3px 0 var(--hot), -3px 0 var(--cyan), 0 0 24px rgba(255,138,60,.7); opacity: 0; }
   #msg.on { opacity: 1; }
@@ -152,14 +153,15 @@
       calc(25% + .6px) calc(3% + 1px), calc(75% - .6px) calc(3% + 1px), calc(100% - 1.2px) 50%, calc(75% - .6px) calc(97% - 1px), calc(25% + .6px) calc(97% - 1px), 1.2px 50%, calc(25% + .6px) calc(3% + 1px)); }
   .hex.down { transform: scale(.92); filter: brightness(1.6); }
   .hexwrap { position: absolute; inset: 0; pointer-events: none; }
+  #controls > .hexwrap { inset: auto; right: max(2.5%, env(safe-area-inset-right)); bottom: 0; width: 230px; height: calc(9vh + 210px); }
   .hexwrap.o { filter: drop-shadow(0 0 6px rgba(255,138,60,.6)); }
   .hexwrap.c { filter: drop-shadow(0 0 6px rgba(63,224,255,.55)); }
-  #btn-attack { --c: var(--neon); right: max(2.5%, env(safe-area-inset-right)); bottom: 9%; width: 124px; height: 108px; font-size: 30px; }
-  #btn-upper { --c: #8a5a3c; right: calc(max(2.5%, env(safe-area-inset-right)) + 116px); bottom: calc(9% + 86px); width: 84px; height: 74px; font-size: 20px; color: #b89a86; text-shadow: none; }
+  #btn-attack { --c: var(--neon); right: 0; bottom: 9vh; width: 124px; height: 108px; font-size: 30px; }
+  #btn-upper { --c: #8a5a3c; right: 116px; bottom: calc(9vh + 86px); width: 84px; height: 74px; font-size: 20px; color: #b89a86; text-shadow: none; }
   #btn-upper.ready { --c: var(--neon); color: #fff; text-shadow: 0 0 8px var(--neon); animation: upReady .7s infinite alternate; }
-  @keyframes upReady { to { filter: brightness(1.6); } }
-  #btn-dodge { --c: var(--cyan); right: calc(max(2.5%, env(safe-area-inset-right)) + 20px); bottom: calc(9% + 124px); width: 84px; height: 74px; font-size: 18px; }
-  #btn-jump { --c: var(--cyan); right: calc(max(2.5%, env(safe-area-inset-right)) + 128px); bottom: max(6px, calc(9% - 26px)); width: 84px; height: 74px; font-size: 16px; }
+  @keyframes upReady { to { opacity: .72; } }
+  #btn-dodge { --c: var(--cyan); right: 20px; bottom: calc(9vh + 124px); width: 84px; height: 74px; font-size: 18px; }
+  #btn-jump { --c: var(--cyan); right: 128px; bottom: max(6px, calc(9vh - 26px)); width: 84px; height: 74px; font-size: 16px; }
   /* liserés techniques décoratifs autour du pavé d'action */
   #controls .deco { position: absolute; right: max(2.5%, env(safe-area-inset-right)); bottom: calc(9% + 214px); width: 150px; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,138,60,.6)); }
   #controls .deco::after { content: ''; position: absolute; right: 0; top: -3px; width: 7px; height: 7px; border: solid rgba(255,138,60,.7); border-width: 1px 1px 0 0; }
@@ -192,6 +194,7 @@
   #loader { position: fixed; inset: 0; z-index: 30; transition: opacity .3s;
     background: #0d0b10 url(assets/title.jpg) center 22% / cover no-repeat; }
   #loader.gone { opacity: 0; pointer-events: none; }
+  #loader.off { display: none; } /* après le fondu : ses animations infinies ne tournent plus derrière la partie */
   #title { position: absolute; right: max(4vw, env(safe-area-inset-right)); top: 50%; transform: translateY(-55%);
     display: flex; flex-direction: column; align-items: center; text-align: center; isolation: isolate; }
   /* halo : lueur orange + trait de lumière horizontal, qui vacillent doucement */

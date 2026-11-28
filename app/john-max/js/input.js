@@ -41,8 +41,7 @@ export class Input {
   }
 
   clear() {
-    this.presses.length = 0;
-    this.down = {};
+    this.presses.length = 0; // les touches tenues restent : leur relâchement arrive même en pause
   }
 
   hold(action, src, on) {

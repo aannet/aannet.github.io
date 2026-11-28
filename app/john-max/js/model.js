@@ -109,6 +109,8 @@ function patchToon(mat, rim, k = 0.55, pw = 4) {
   mat.customProgramCacheKey = () => 'cloth-rim';
 }
 
+const BOUNDS = new THREE.Sphere(new THREE.Vector3(0, 0.95, 0), 1.35);
+
 // Contour inverted hull compatible skinning : on gonfle la position avant le skinning
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x0c0810, side: THREE.BackSide });
 outlineMat.onBeforeCompile = (sh) => {
@@ -124,7 +126,8 @@ export class Model {
     let body = null;
     this.root.traverse((o) => {
       if (!o.isMesh) return;
-      o.frustumCulled = false;
+      // culling sur une sphère fixe autour du perso (le calcul auto d'un skinned mesh suivrait mal les poses)
+      if (o.isSkinnedMesh) o.boundingSphere = BOUNDS.clone();
       const src = o.material;
       const mat = new THREE.MeshToonMaterial({ color: 0xffffff, map: src.map || null, gradientMap: g });
       if (/superhero/i.test(src.name)) {
@@ -142,7 +145,7 @@ export class Model {
     this.body = body;
     const outline = new THREE.SkinnedMesh(body.geometry, outlineMat);
     outline.bind(body.skeleton, body.bindMatrix);
-    outline.frustumCulled = false;
+    outline.boundingSphere = BOUNDS.clone();
     body.parent.add(outline);
 
     this.bones = {};

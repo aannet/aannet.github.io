@@ -101,6 +101,7 @@ export class Level {
 
     this.decor = new Decor(scene, LAMPS, tile);
     // deuxième tuile : même géométrie et matériaux (clone léger), vapeur figée masquée
+    tile.traverse((o) => { if (o !== tile && !o.isSprite) { o.updateMatrix(); o.matrixAutoUpdate = false; } });
     this.tiles = [tile, tile.clone()];
     this.tiles[1].traverse((o) => { if (o.isSprite) o.visible = false; });
     scene.add(...this.tiles);
@@ -128,7 +129,9 @@ export class Level {
       g.beginPath(); g.moveTo(4, 4); g.lineTo(w - 4, h - 4); g.stroke();
     }));
     this.canMat = toon(0x3f5a50);
-    this.lidMat = toon(0x2e443c);
+    // géométries créées une fois : les respawns ne réallouent rien ; poubelle et couvercle fusionnés (1 mesh + 1 contour)
+    this.crateGeo = new THREE.BoxGeometry(0.55, 0.55, 0.55);
+    this.canGeo = mergeGeometries([new THREE.CylinderGeometry(0.25, 0.22, 0.72, 12), new THREE.CylinderGeometry(0.27, 0.27, 0.05, 12).translate(0, 0.38, 0)]);
     this.breakables = new Breakables(game, this);
     this.resetProps();
   }
@@ -147,16 +150,14 @@ export class Level {
     {
       let mesh, col;
       if (d.kind === 'crate') {
-        mesh = toonMesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), this.crateMat, scene);
+        mesh = toonMesh(this.crateGeo, this.crateMat, scene);
         col = R.ColliderDesc.cuboid(0.275, 0.275, 0.275).setDensity(0.25);
       } else {
-        mesh = toonMesh(new THREE.CylinderGeometry(0.25, 0.22, 0.72, 12), this.canMat, scene);
-        const lid = toonMesh(new THREE.CylinderGeometry(0.27, 0.27, 0.05, 12), this.lidMat, mesh);
-        lid.position.y = 0.38;
+        mesh = toonMesh(this.canGeo, this.canMat, scene);
         col = R.ColliderDesc.cylinder(0.36, 0.25).setDensity(0.18);
       }
       const body = world.createRigidBody(
-        R.RigidBodyDesc.dynamic().setTranslation(d.x, d.y + dropY, d.z).setLinearDamping(0.1).setAngularDamping(0.3).setCcdEnabled(true)
+        R.RigidBodyDesc.dynamic().setTranslation(d.x, d.y + dropY, d.z).setLinearDamping(0.1).setAngularDamping(0.3)
       );
       world.createCollider(col.setFriction(0.7).setRestitution(0.2).setCollisionGroups(cg), body);
       const p = { mesh, body, vprev: 0, def: d, kind: d.kind, hits: 0 };
@@ -168,6 +169,7 @@ export class Level {
   sync(dt) {
     this.boxSoundT -= dt;
     for (const p of this.props) {
+      if (p.body.isSleeping()) { p.vprev = 0; continue; }
       const t = p.body.translation(), r = p.body.rotation();
       p.mesh.position.set(t.x, t.y, t.z);
       p.mesh.quaternion.set(r.x, r.y, r.z, r.w);

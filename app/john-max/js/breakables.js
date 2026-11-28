@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CFG, G, groups } from './config.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toonGradient, toonMesh } from './toon.js';
 import { sfx } from './audio.js';
 
@@ -22,7 +23,7 @@ export class Breakables {
     this.debris = [];
     this.respawns = [];
     this.plankGeo = new THREE.BoxGeometry(0.5, 0.07, 0.13);
-    this.glassMat = new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
+    this.glassMat = new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
     this.frameMat = new THREE.MeshToonMaterial({ color: 0x2b2a36, gradientMap: toonGradient() });
     this.glass = GLASS.map((g) => ({ ...g, intact: true, mesh: null, body: null }));
     for (const g of this.glass) this.buildGlass(g);
@@ -40,16 +41,15 @@ export class Breakables {
     const { scene, R, world } = this.game;
     const len = g.z1 - g.z0, zc = (g.z0 + g.z1) / 2;
     if (!g.frame) {
-      g.frame = new THREE.Group();
-      for (const z of [g.z0, g.z1]) {
-        const post = toonMesh(new THREE.BoxGeometry(0.06, 2.1, 0.06), this.frameMat, g.frame);
-        post.position.set(g.x, 1.05, z);
-      }
-      const top = toonMesh(new THREE.BoxGeometry(0.08, 0.06, len + 0.06), this.frameMat, g.frame);
-      top.position.set(g.x, 2.1, zc);
-      scene.add(g.frame);
+      const M = new THREE.Matrix4();
+      g.frame = toonMesh(mergeGeometries([
+        new THREE.BoxGeometry(0.06, 2.1, 0.06).applyMatrix4(M.makeTranslation(g.x, 1.05, g.z0)),
+        new THREE.BoxGeometry(0.06, 2.1, 0.06).applyMatrix4(M.makeTranslation(g.x, 1.05, g.z1)),
+        new THREE.BoxGeometry(0.08, 0.06, len + 0.06).applyMatrix4(M.makeTranslation(g.x, 2.1, zc)),
+      ]), this.frameMat, scene);
+      g.paneGeo = new THREE.PlaneGeometry(len, 1.9); // gardée : la vitre se reconstruit sans réallouer
     }
-    g.mesh = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.9), this.glassMat);
+    g.mesh = new THREE.Mesh(g.paneGeo, this.glassMat);
     g.mesh.rotation.y = Math.PI / 2;
     g.mesh.position.set(g.x, 1.08, zc);
     g.mesh.renderOrder = 4;
@@ -78,7 +78,11 @@ export class Breakables {
   block(ch, prevX) {
     for (const g of this.glass) {
       if (!g.intact || ch.z < g.z0 - 0.3 || ch.z > g.z1 + 0.3) continue;
-      if (Math.abs(ch.x - g.x) < 0.3) ch.x = g.x + (prevX < g.x ? -0.3 : 0.3);
+      if (Math.abs(ch.x - g.x) < 0.3) {
+        ch.x = g.x + (prevX < g.x ? -0.3 : 0.3);
+        // l'IA contourne par le bout le plus proche de la vitrine au lieu de rester collée
+        if (ch.T) { ch.detourZ = ch.z < (g.z0 + g.z1) / 2 ? Math.max(-1.4, g.z0 - 0.5) : Math.min(1.1, g.z1 + 0.5); ch.detourT = 1.2; }
+      }
     }
   }
 

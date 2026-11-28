@@ -75,6 +75,11 @@ Tout le game feel est réglable en direct : vitesse des animations, hitstop, sha
 ## Choix d'optimisation (feintes assumées)
 
 - Rue infinie à coût fixe : le décor fait 30 m ; deux copies (mêmes géométries et matériaux) se relaient autour de la caméra. Le stage de 72 m ne coûte pas un draw call de plus qu'une rue de 60 m.
+- Matériaux transparents double face en une passe (`forceSinglePass`) : sinon three reconstruit leur clé de programme à chaque frame.
+- Portrait du HUD rendu au chargement dans un coin du canvas principal (mêmes shaders, aucune compilation en plus), puis copié.
+- Props : on ne lit Rapier que pour les corps éveillés ; géométries partagées (plus de fuite au respawn) ; CCD réservé à la poubelle lancée.
+- Persos : culling sur une sphère fixe ; ennemis inactifs retirés de la scène ; enfants statiques du décor à matrices figées.
+- HUD : barres en `scaleX` (compositeur), pulsations en opacité, zones de lueur (drop-shadow) limitées aux boutons, écran titre en `display:none` après le fondu.
 - Pool d'ennemis fixe (7 modèles chargés au démarrage, 4 à l'écran au maximum) : aucun modèle créé pendant la partie ; les inactifs sont masqués et ne sont pas mis à jour.
 
 - Rendu à 540 lignes avec MSAA, agrandi en douceur : 2 à 3× moins de pixels qu'en natif. À 360 lignes ou moins, agrandissement `pixelated` pour un look pixel art (⚙ > Rendu).

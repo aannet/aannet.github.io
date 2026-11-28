@@ -112,11 +112,13 @@ export class Enemy extends Character {
     this.active = true;
     this.fall = null;
     this.stunHits = 0;
+    this.stunT = 0;
     this.phase2 = false;
     this.attacks = 0;
     this.cooldown = 0.6 + Math.random() * 0.6;
     this.clip = null;
     this.model.root.visible = true;
+    this.game.scene.add(this.model.root, this.bar);
     this.model.setFlash(0);
     this.collider.setEnabled(true);
     this.setState('enter');
@@ -127,6 +129,7 @@ export class Enemy extends Character {
     this.releaseToken();
     this.model.root.visible = false;
     this.bar.visible = false;
+    this.game.scene.remove(this.model.root, this.bar);
     this.collider.setEnabled(false);
     this.state = 'off';
   }
@@ -227,6 +230,7 @@ export class Enemy extends Character {
 
   // Marche vers (tx, tz) ; renvoie le pivot de profondeur pour le « lean »
   moveTo(tx, tz, dt) {
+    if (this.detourT > 0) { this.detourT -= dt; tz = this.detourZ; } // contournement d'une vitrine
     const dx = tx - this.x, dz = tz - this.z, d = Math.hypot(dx, dz);
     const sp = CFG.enemySpeed * this.T.speed * (this.phase2 ? 1.2 : 1) * Math.min(1, d / 0.4);
     let mx = 0, mz = 0;
@@ -295,7 +299,10 @@ export class Enemy extends Character {
       }
       case 'approach': {
         this.facing = toHero;
-        const side = this.x >= hero.x ? 1 : -1;
+        // côté d'approche ; si la place manque contre un mur pour prendre de l'élan, il passe de l'autre côté
+        let side = this.x >= hero.x ? 1 : -1;
+        const room = T.attack === 'charge' || T.attack === 'throw' ? 4.2 : 0;
+        if (room && (side > 0 ? ARENA.maxX - hero.x : hero.x - ARENA.minX) < room) side = -side;
         const lane = (i) => Math.max(ARENA.minZ, Math.min(ARENA.maxZ, hero.z + i));
         const wait = 2.2 + (this.waitSlot || 0) * 0.45;
         if (T.attack === 'boss') { lean = this.bossThink(dt, side, adx, adz); break; }
@@ -308,6 +315,8 @@ export class Enemy extends Character {
         }
         const mine = this.cooldown <= 0 && adx < 6 && this.takeToken();
         if (T.attack === 'charge') {
+          this.planT = mine ? (this.planT || 0) + dt : 0;
+          if (this.planT > 3) { this.planT = 0; this.releaseToken(); this.cooldown = 0.8; break; } // plan raté : il rend le jeton
           lean = this.moveTo(hero.x + side * (mine ? 3.8 : wait + 0.6), mine ? hero.z : lane(this.waitSlot % 2 ? 0.55 : -0.55), dt);
           if (mine && adz < 0.3 && adx > 2.2 && adx < 5.5) this.startWindup('charge');
           break;
@@ -363,7 +372,7 @@ export class Enemy extends Character {
         break;
       }
       case 'stun': {
-        if (this.t >= this.stunT) this.endAttack(T.boss ? 0.6 : 1.2);
+        if (this.t >= this.stunT) { this.stunT = 0; this.endAttack(T.boss ? 0.6 : 1.2); }
         break;
       }
       case 'attack': {
@@ -397,7 +406,8 @@ export class Enemy extends Character {
       case 'hitstun': {
         if (this.t >= this.stunDur) {
           this.cooldown = Math.max(this.cooldown, T.boss ? 0.2 : 0.4);
-          if (T.boss && this.stunHits < 5 && this.stunT > 0) this.stun(0.4); else this.setState('approach');
+          if (T.boss && this.stunHits < 5 && this.stunT > 0) { const n = this.stunHits; this.stun(0.4); this.stunHits = n; }
+          else { this.stunT = 0; this.setState('approach'); }
         }
         break;
       }
@@ -455,6 +465,8 @@ export class Enemy extends Character {
   // ---- Boss : choisit entre combo (près), charge (loin, aligné) et saut + onde de choc (tous les 3 coups)
   bossThink(dt, side, adx, adz) {
     const hero = this.game.hero;
+    if (this.t > 3 && this.nextMove && this.nextMove !== 'combo') { this.nextMove = adx < 1.6 ? 'combo' : 'slam'; this.t = 0; } // plan bloqué
+    if ((side > 0 ? ARENA.maxX - hero.x : hero.x - ARENA.minX) < 4.4) side = -side;
     const want = this.nextMove || (this.nextMove = this.pickMove(adx));
     let lean;
     if (want === 'combo') {
@@ -527,7 +539,7 @@ export class Hazards {
       return { m, on: false, owner: null, v: new THREE.Vector3() };
     });
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xff3d6e, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+      new THREE.MeshBasicMaterial({ color: 0xff3d6e, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true }));
     ring.visible = false;
     ring.renderOrder = 4;
     game.scene.add(ring);

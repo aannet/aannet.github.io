@@ -35,7 +35,7 @@ export class Blobs {
       if (ch.active !== false) this.set(i++, ch.x, ch.z, 0.9 * (ch.hScale || 1), ch.y);
     }
     for (const p of game.level.props) {
-      const t = p.body.translation();
+      const t = p.mesh.position;
       if (Math.abs(t.x - game.camX) < 9) this.set(i++, t.x, t.z, 0.75, Math.max(0, t.y - 0.3));
     }
     for (const w of game.weapons.items) {

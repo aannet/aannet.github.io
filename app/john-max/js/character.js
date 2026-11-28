@@ -4,6 +4,7 @@ import { Model } from './model.js';
 import { ARENA } from './level.js';
 
 const _v = new THREE.Vector3();
+const NO_BLOCK = new Set(['knock', 'grabbed', 'down', 'enter']);
 
 // Base commune héros / ennemis : modèle riggé + AnimationMixer, capsule cinématique (pousse le décor).
 // La logique de chaque perso choisit les clips ; la base gère la lecture et le placement.
@@ -56,7 +57,7 @@ export class Character {
   clampArena() {
     if (this.state !== 'enter') this.x = Math.max(ARENA.minX, Math.min(ARENA.maxX, this.x));
     this.z = Math.max(ARENA.minZ, Math.min(ARENA.maxZ, this.z));
-    if (this.y === 0 && !['knock', 'grabbed', 'down', 'enter'].includes(this.state)) this.game.level.breakables?.block(this, this.lastX ?? this.x);
+    if (this.y === 0 && !NO_BLOCK.has(this.state)) this.game.level.breakables?.block(this, this.lastX ?? this.x);
     this.lastX = this.x;
   }
 

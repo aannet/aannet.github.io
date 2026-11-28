@@ -62,7 +62,8 @@ export class Stage {
     const g = this.game, e = this.pool.find((p) => p.type === type && !p.active);
     if (!e) return;
     const cx = g.camX;
-    const enterX = Math.max(ARENA.minX + 0.6, Math.min(ARENA.maxX - 0.6, cx + side * (2.6 + Math.random() * 1.6)));
+    let enterX = Math.max(ARENA.minX + 0.6, Math.min(ARENA.maxX - 0.6, cx + side * (2.6 + Math.random() * 1.6)));
+    for (const gl of g.level.breakables.glass) if (Math.abs(enterX - gl.x) < 0.7) enterX = gl.x - side * 0.7; // pas d'arrivée contre une vitrine
     e.waitSlot = g.enemies.length;
     e.spawn(cx + side * 6.8, ARENA.minZ + 0.3 + Math.random() * (ARENA.maxZ - ARENA.minZ - 0.6), enterX);
     g.enemies.push(e);
@@ -100,6 +101,11 @@ export class Stage {
     const g = this.game;
     this.state = 'won';
     this.queue.length = 0;
+    // victoire acquise : plus rien ne doit toucher John pendant le ralenti
+    if (g.hero.held) { g.hero.held = null; g.hero.setState('free'); }
+    g.hero.invuln = 99;
+    g.bottles.shock = null;
+    g.bottles.ring.visible = false;
     g.time.slowmo(1.6);
     g.juice.camPunch(0.2);
     for (const e of g.enemies) {
@@ -140,7 +146,7 @@ export class Stage {
       ARENA.minX = Math.max(ARENA.minX, g.camX - 5.3); // pas de retour en arrière hors champ
       if (hero.x > ZONES[this.zone + 1].x0 + 4.5) this.enterZone(this.zone + 1);
     }
-    if (this.boss && this.boss.active) this.bossFill.style.width = `${Math.max(0, this.boss.hp / this.boss.maxHp) * 100}%`;
+    if (this.boss && this.boss.active) this.bossFill.style.transform = `scaleX(${Math.max(0, this.boss.hp / this.boss.maxHp)})`;
     for (let i = this.foods.length - 1; i >= 0; i--) {
       const f = this.foods[i];
       f.t += dt;

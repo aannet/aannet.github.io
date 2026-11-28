@@ -20,6 +20,8 @@ function tex(size, draw) {
 }
 
 // Pool de sprites animés (échelle, opacité, dérive)
+const _dp = new THREE.Vector3();
+
 class SpritePool {
   constructor(scene, map, color, n, blending = THREE.AdditiveBlending, order = 10) {
     this.items = [];
@@ -228,7 +230,7 @@ export class Juice {
   dust(x, z, amount = 1) {
     const n = Math.round(3 + amount * 4);
     for (let k = 0; k < n; k++) {
-      const p = new THREE.Vector3(x + (Math.random() - 0.5) * 0.9 * amount, 0.12, z + (Math.random() - 0.5) * 0.4);
+      const p = _dp.set(x + (Math.random() - 0.5) * 0.9 * amount, 0.12, z + (Math.random() - 0.5) * 0.4); // copié par spawn
       this.dusts.spawn(p, 0.45 + Math.random() * 0.3, 0.25, 0.7 + amount * 0.5, 0.55, Math.random() * 6, 0.35 + Math.random() * 0.4);
     }
   }

@@ -183,6 +183,7 @@ function neons(scene, lampXs) {
   });
   const coneMesh = new THREE.Mesh(mergeGeometries(cones), additive(coneTex));
   coneMesh.material.side = THREE.DoubleSide;
+  coneMesh.material.forceSinglePass = true;
   coneMesh.renderOrder = 6;
   scene.add(coneMesh);
 }

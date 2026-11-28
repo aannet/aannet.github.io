@@ -245,7 +245,15 @@ export class Weapons {
     return p;
   }
 
+  // fin de vol : la poubelle redevient un objet du décor
+  land(f) {
+    f.p.body.collider(0).setCollisionGroups(groups(G.PROPS, 0xffff));
+    this.game.level.props.push(f.p);
+    this.flying = null;
+  }
+
   throwCan(hero, dir) {
+    if (this.flying) this.land(this.flying); // une seule poubelle suivie à la fois
     const p = this.release(hero, dir * CFG.canThrowV, 2.2);
     // en vol, la poubelle traverse les capsules des persos : c'est le test ci-dessous qui gère l'impact
     p.body.collider(0).setCollisionGroups(groups(G.PROPS, 0xffff & ~G.CHAR));
@@ -271,6 +279,7 @@ export class Weapons {
           f.hit.add(e);
           e.hp -= 20 * CFG.damageMult;
           e.bowled.clear();
+          e.releaseToken();
           if (!(e.T.boss && e.hp > 0)) e.knock(f.dir * CFG.knockHeavy * 1.3, CFG.knockUp); // le boss encaisse
           game.juice.flash(e.rig);
           game.juice.hit(_p.set(t.x, t.y, t.z), f.dir, 1, e.headPos(new THREE.Vector3()));
@@ -285,11 +294,7 @@ export class Weapons {
       }
       game.level.breakables.sweepPoint(t, f.dir, f.hit);
     }
-    if (f.t <= 0 || (!fast && f.t < 1.2)) {
-      f.p.body.collider(0).setCollisionGroups(groups(G.PROPS, 0xffff));
-      game.level.props.push(f.p);
-      this.flying = null;
-    }
+    if (f.t <= 0 || (!fast && f.t < 1.2)) this.land(f);
   }
 
   // Panneau de debug : fait retomber une arme du type demandé près de John

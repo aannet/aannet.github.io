@@ -103,12 +103,13 @@ async function boot() {
     game.input.clear();
   };
   const togglePause = () => {
-    if (!loader.classList.contains('gone') || help.classList.contains('on') || gameOver) return;
     if (optEl.classList.contains('on')) { optEl.classList.remove('on'); return; }
+    if (!loader.classList.contains('gone') || help.classList.contains('on') || gameOver) return;
     setPause(!game.paused);
   };
   game.input.onPause = togglePause;
   document.getElementById('btn-pause').addEventListener('click', togglePause);
+  matchMedia('(orientation: portrait) and (pointer: coarse)').addEventListener('change', (e) => { if (e.matches && loader.classList.contains('gone') && !game.paused) setPause(true); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && loader.classList.contains('gone') && !game.paused) setPause(true); });
   // John à 0 PV : il tombe, puis CONTINUER ? (vie pleine, les ennemis proches sont repoussés)
   game.onHeroDown = () => {
@@ -195,7 +196,7 @@ async function boot() {
   }
 
   // « Bowling » : un ennemi projeté renverse ceux qu'il percute
-  const _bp = new THREE.Vector3();
+  const _bp = new THREE.Vector3(), _bh = new THREE.Vector3();
   function bowlHit(a, b, p, v) {
     a.bowled.add(b);
     b.hp -= 12 * CFG.damageMult;
@@ -203,26 +204,36 @@ async function boot() {
     b.heavyHit({ x: v.x * 0.75, y: Math.max(2.5, v.y * 0.4 + 2.5) });
     game.juice.flash(b.rig);
     game.juice.shake(CFG.shakeHeavy * 0.8);
-    game.juice.hit(_bp.set(p.x, p.y, p.z), Math.sign(v.x), 1, b.headPos(new THREE.Vector3()));
+    game.juice.hit(_bp.set(p.x, p.y, p.z), Math.sign(v.x), 1, b.headPos(_bh));
     game.time.hitstop(CFG.hitstopHeavy * 0.7);
     sfx.punch(true);
     game.ui.combo();
     if (ko) game.onKO(b);
   }
+  const _bp2 = { x: 0, y: 0, z: 0 }, _bv = { x: 0, y: 0 };
   function bowling() {
     if (!CFG.bowling) return;
     for (const a of game.enemies) {
-      const targets = (p) => game.enemies.filter((b) => b !== a && !b.T.boss && b.hittable() && !a.bowled.has(b) && Math.hypot(p.x - b.x, p.z - b.z) < 0.5 && p.y < 1.8);
-      if (a.state === 'knock' && Math.abs(a.vx) > 2.5) {
-        const p = { x: a.x + Math.sign(a.vx) * 0.3, y: a.y + 0.6, z: a.z };
-        for (const b of targets(p)) bowlHit(a, b, p, { x: a.vx, y: a.vy });
+      if (a.state !== 'knock' || Math.abs(a.vx) <= 2.5) continue;
+      const p = _bp2;
+      p.x = a.x + Math.sign(a.vx) * 0.3; p.y = a.y + 0.6; p.z = a.z;
+      if (p.y >= 1.8) continue;
+      for (let i = 0; i < game.enemies.length; i++) {
+        const b = game.enemies[i];
+        if (b === a || b.T.boss || !b.hittable() || a.bowled.has(b) || Math.hypot(p.x - b.x, p.z - b.z) >= 0.5) continue;
+        _bv.x = a.vx; _bv.y = a.vy;
+        bowlHit(a, b, p, _bv);
       }
     }
   }
 
   // Séparation entre persos debout
+  const _sep = [];
   function separate() {
-    const list = [game.hero, ...game.enemies.filter((e) => e.hittable() || e.state === 'enter')];
+    const list = _sep;
+    list.length = 0;
+    list.push(game.hero);
+    for (const e of game.enemies) if (e.hittable() || e.state === 'enter') list.push(e);
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i], b = list[j];
@@ -253,27 +264,25 @@ async function boot() {
     game.stage.update(gdt);
   }
 
-  // Portrait du HUD : photo du héros (vrai modèle, pose de garde) prise une fois dans une cible de 96 px
-  let portraitDone = 0;
+  // Portrait du HUD : photo du héros (vrai modèle, pose de garde) prise une fois au chargement, derrière l'écran titre.
+  // Rendu dans un coin du canvas principal (mêmes shaders, même sortie sRGB : aucune compilation en plus), copié aussitôt.
   function snapshotPortrait() {
-    const S = 96, h = game.hero, rt = new THREE.WebGLRenderTarget(S, S, { samples: 4 });
-    rt.texture.colorSpace = THREE.SRGBColorSpace;
+    const S = 96, h = game.hero, pr = renderer.getPixelRatio(), s = S / pr;
     const cam = new THREE.PerspectiveCamera(24, 1, 0.1, 30);
     const head = h.headPos(new THREE.Vector3());
     cam.position.set(head.x + h.facing * 0.75, head.y + 0.05, head.z + 1.5);
     cam.lookAt(head.x, head.y - 0.3, head.z);
-    const bars = game.enemies.map((e) => e.bar.visible);
-    game.enemies.forEach((e) => { e.bar.visible = false; });
-    renderer.setRenderTarget(rt);
+    const shown = scene.children.map((o) => o.visible);
+    scene.children.forEach((o) => { o.visible = o === h.model.root || o.isLight; });
+    renderer.setViewport(0, 0, s, s);
+    renderer.setScissor(0, 0, s, s);
+    renderer.setScissorTest(true);
     renderer.render(scene, cam);
-    const px = new Uint8Array(S * S * 4);
-    renderer.readRenderTargetPixels(rt, 0, 0, S, S, px);
-    renderer.setRenderTarget(null);
-    game.enemies.forEach((e, i) => { e.bar.visible = bars[i]; });
-    rt.dispose();
-    const cv = document.querySelector('#portrait canvas'), c = cv.getContext('2d'), img = c.createImageData(S, S);
-    for (let y = 0; y < S; y++) img.data.set(px.subarray((S - 1 - y) * S * 4, (S - y) * S * 4), y * S * 4); // lignes inversées (GL)
-    c.putImageData(img, 0, 0);
+    const cv = renderer.domElement;
+    document.querySelector('#portrait canvas').getContext('2d').drawImage(cv, 0, cv.height - S, S, S, 0, 0, S, S);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    scene.children.forEach((o, i) => { o.visible = shown[i]; });
   }
 
   let last = performance.now();
@@ -287,7 +296,6 @@ async function boot() {
       return;
     }
     game.time.advance(dt, tick);
-    if (portraitDone < 30 && ++portraitDone === 30) snapshotPortrait(); // une fois le héros posé dans sa garde
     game.juice.update(dt);
     game.ui.update(dt);
     for (const e of game.enemies) e.updateBar();
@@ -303,7 +311,9 @@ async function boot() {
     camera.updateProjectionMatrix();
   });
 
-  game.hero.step(1 / 60); // pose de garde
+  game.hero.anim('Guard', { speed: 0, loop: true }); // pose de garde
+  for (let i = 0; i < 20; i++) game.hero.step(1 / 60);
+  snapshotPortrait();
   renderer.render(scene, camera); // compile les shaders pendant l'écran titre
   progress(1, 'Prêt');
   const loader = document.getElementById('loader');
@@ -311,8 +321,11 @@ async function boot() {
   const start = () => {
     unlockAudio();
     game.paused = false;
+    game.input.clear();
     game.stage.start();
     loader.classList.add('gone');
+    const off = (e) => { if (e.target === loader) { loader.classList.add('off'); loader.removeEventListener('transitionend', off); } };
+    loader.addEventListener('transitionend', off);
   };
   // aide : panneau des commandes, fermé par ✕, Échap ou un toucher hors de la carte
   const help = document.getElementById('help');
