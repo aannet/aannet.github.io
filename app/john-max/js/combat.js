@@ -54,7 +54,7 @@ export function resolveHit(game, A, enemy, point, k = 1) {
   juice.shake((heavy ? CFG.shakeHeavy : CFG.shakeLight) * (A.ws || 1));
   if (heavy) juice.camPunch(CFG.camPunch * (A.weapon ? 1.4 : 1));
   juice.flash(enemy.rig);
-  juice.hit(point, dir, A.weapon ? 2 : heavy ? 1 : 0, enemy.headPos(_l));
+  juice.hit(point, dir, A.weapon ? 2 : heavy ? 1 : 0, enemy.headPos(_l), A.weapon ? 'blade' : heavy ? 'heavy' : 'light');
   if (A.weapon) sfx[A.sfx](); else sfx.punch(heavy);
   game.ui.combo();
 
@@ -84,8 +84,9 @@ function resolveCharged(game, enemy, point, dir, k) {
   juice.shake(CFG.shakeHeavy * (1.1 + 0.6 * k));
   juice.camPunch(CFG.camPunch * (1.5 + k));
   juice.flash(enemy.rig);
-  juice.hit(point, dir, 2, enemy.headPos(_l));
+  juice.hit(point, dir, 2, enemy.headPos(_l), 'heavy');
   juice.energyBurst(point, 0.6 + k);
+  if (k > 0.95) juice.scorch(enemy.x, enemy.z); // charge pleine : brûlure au sol
   sfx.charged(k);
   game.ui.combo();
   enemy.heavyHit({ x: dir * CFG.knockHeavy * (1 + CFG.chargeKnock * k * 0.6), y: CFG.knockUp * (1 + 0.4 * k) });
@@ -121,7 +122,7 @@ export function resolveJuggle(game, A, enemy, point) {
   time.hitstop((A.heavy ? CFG.hitstopHeavy : CFG.hitstopLight) * 0.8);
   juice.shake(A.heavy ? CFG.shakeHeavy * 0.8 : CFG.shakeLight);
   juice.flash(enemy.rig);
-  juice.hit(point, Math.sign(point.x - hero.x) || hero.facing, A.weapon ? 2 : A.heavy ? 1 : 0, enemy.headPos(_l));
+  juice.hit(point, Math.sign(point.x - hero.x) || hero.facing, A.weapon ? 2 : A.heavy ? 1 : 0, enemy.headPos(_l), A.weapon ? 'blade' : A.heavy ? 'heavy' : 'light');
   if (A.weapon) sfx[A.sfx](); else sfx.punch(A.heavy);
   game.ui.combo();
 }

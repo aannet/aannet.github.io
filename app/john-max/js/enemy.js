@@ -345,7 +345,7 @@ export class Enemy extends Character {
         this.anim('Jog_Fwd_Loop', { fade: 0.08, speed: 2.2 });
         const v = T.chargeV * (this.phase2 ? 1.15 : 1);
         this.x += this.facing * v * dt;
-        if (this.t % 0.12 < dt) game.juice.dust(this.x - this.facing * 0.3, this.z, 0.35);
+        if (this.t % 0.12 < dt) { game.juice.dust(this.x - this.facing * 0.3, this.z, 0.35); game.juice.speed(_p.set(this.x - this.facing * 0.4, 0.9, this.z), this.facing); }
         if (!this.struck && Math.abs(hero.x - this.x) < 0.6 && adz < 0.45 && hero.y < 0.6) this.hitHero(T.attack === 'boss' ? 16 : T.dmg, true);
         const passed = (this.x - hero.x) * this.facing > 1.8;
         const wall = this.x <= ARENA.minX + 0.05 || this.x >= ARENA.maxX - 0.05;

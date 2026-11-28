@@ -129,6 +129,7 @@ export class Hero extends Character {
     this.invuln = this.dodgeDur * CFG.dodgeInvuln;
     this.dusted = false;
     this.anim('Roll', { fade: 0.05, restart: true, speed: 1.5 });
+    this.game.juice.speed(_p.set(this.x, 0.6, this.z), this.facing);
     sfx.whoosh(true);
     this.setState('dodge');
   }
@@ -209,7 +210,7 @@ export class Hero extends Character {
     const { juice, time } = this.game;
     juice.flash(this.rig);
     juice.shake(0.3);
-    juice.hit(this.headPos(_p).setY(_p.y - 0.25), -dir, 0, null);
+    juice.hit(this.headPos(_p).setY(_p.y - 0.25), -dir, 0, null, 'heavy');
     this.game.input.rumble(60, 0.5);
     sfx.hurt();
     time.hitstop(0.06);
@@ -396,7 +397,7 @@ export class Hero extends Character {
     if (this.state === 'charge') {
       this.chargeT += dt;
       this.chargeK = Math.min(1, this.chargeT / CFG.chargeFull);
-      this.game.juice.charge(this.tip('fistR', _p), this.chargeK);
+      this.game.juice.charge(this.tip('fistR', _p), this.chargeK, this.facing);
       if (input.heldFor('attack') === 0) { this.stopCharge(); input.take('attack', 1); this.startAttack(0, CHARGED); }
       else if (input.take('dodge', CFG.inputBuffer)) { this.stopCharge(); this.startDodge(); }
     }
@@ -435,7 +436,12 @@ export class Hero extends Character {
     const ct = act.time;
     if (this.phase === 'main') {
       if (ct < A.active[1]) this.x += this.facing * A.lunge * dt;
-      if (!this.whooshed && ct >= A.active[0] * 0.7) { sfx.whoosh(A.heavy); this.whooshed = true; }
+      if (!this.whooshed && ct >= A.active[0] * 0.7) {
+        sfx.whoosh(A.heavy);
+        this.whooshed = true;
+        if (A.weapon) this.game.juice.slash(_p.set(this.x + this.facing * 0.55, 1.15, this.z + 0.05), this.facing, A.name.endsWith('2'));
+        else if (!A.smash && !A.charged) this.game.juice.trail(this.tip(A.tip, _p), this.facing);
+      }
     }
     const canCancel = this.phase === 'rec' || ct >= A.cancel;
     // PAF maintenu pendant un coup : on bascule en charge, seulement quand le coup peut s'annuler

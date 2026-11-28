@@ -73,6 +73,7 @@ export class Stage {
   // Ennemi KO qui a fini de clignoter : retour au pool
   remove(e) {
     const g = this.game;
+    if (e.ko) g.juice.dissolve(new THREE.Vector3(e.x, 0.5, e.z)); // dissipation numérique du corps
     e.deactivate();
     const i = g.enemies.indexOf(e);
     if (i >= 0) g.enemies.splice(i, 1);

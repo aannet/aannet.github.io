@@ -22,6 +22,16 @@ Une rue de 72 m en 4 zones. La caméra se verrouille sur chaque zone tant que se
 - Nourriture : une caisse par zone cache un bol de ramen (+30 PV).
 - Boss KO : ralenti, ses sbires tombent avec lui, écran STAGE CLEAR (KO, temps, continues) et REJOUER.
 
+## Effets d'impact
+
+Atlas `assets/fx/fx.webp` (130 Ko) découpé dans la planche « attaque normale » fournie (`tools/fx/sheet.jpg`, script `tools/fx/make_atlas.py`). Fond rendu transparent, sprites en pools (`juice.js`, `FxPool`) qui grossissent et s'effacent.
+
+- Coup léger (jab, cross) : éclair en X bleu, gerbe et halo bleus, pixels qui se dissipent, traînée du poing.
+- Coup lourd (crochet, Charged Punch, projections) : étoile et flamme orange, fumée ; charge pleine = brûlure au sol. Pendant la charge, le poing s'entoure d'anneaux de feu.
+- Arme : arc en croissant cyan pendant le coup, étoile à 4 branches à l'impact, dissipation « circuit » ; reflet au ramassage.
+- Roulade et charge du fonceur : traînée de vitesse. Ennemi KO qui disparaît : dissipation numérique.
+- Le smash garde son éclair cyan-violet plein écran.
+
 ## Contrôles
 
 - Toutes les commandes sont listées dans le bouton AIDE de l'accueil.

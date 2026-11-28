@@ -108,6 +108,7 @@ class Weapon {
     this.group.rotation.set(0, 0, Math.PI / 2);
     this.mesh.position.set(0, -this.def.len / 2 + 0.08, 0);
     this.game.ui.message(this.def.label + ' !', 0.8);
+    this.game.juice.glint(this.group.getWorldPosition(_p).setY(1.2));
     sfx.pickup();
   }
 
@@ -132,7 +133,8 @@ class Weapon {
     this.state = 'gone';
     this.respawnT = 6;
     sfx.crack();
-    juice.hit(_p, hero.facing, 2);
+    juice.hit(_p, hero.facing, 2, null, 'blade');
+    juice.dissolve(_p);
     this.game.ui.message('CRAC !', 0.8);
     const half = this.def.len / 2;
     for (let i = 0; i < 2; i++) {
