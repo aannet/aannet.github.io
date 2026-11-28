@@ -35,6 +35,16 @@ export function resolveHit(game, A, enemy, point, k = 1) {
   const ko = enemy.hp <= 0;
   const heavy = A.heavy || ko;
 
+  // ennemi en pleine attaque : un coup léger le blesse sans l'interrompre (il faut un coup lourd, une arme, une saisie)
+  if (!heavy && !A.weapon && enemy.armored()) {
+    time.hitstop(CFG.hitstopLight * 0.6);
+    juice.shake(CFG.shakeLight * 0.5);
+    juice.sparks(point, dir, 6 * CFG.particles, 0, [1, 0.35, 0.24]);
+    sfx.punch(false);
+    game.ui.combo();
+    return;
+  }
+
   // armes : hitstop (wh), secousse (ws), projection (wk) et son propres à chaque arme
   time.hitstop(A.weapon ? A.wh : heavy ? CFG.hitstopHeavy : CFG.hitstopLight);
   juice.shake((heavy ? CFG.shakeHeavy : CFG.shakeLight) * (A.ws || 1));

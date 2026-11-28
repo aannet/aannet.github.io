@@ -40,6 +40,7 @@ export const CFG = {
   specialHurt: 10,
   smashRadius: 3,
   smashKnock: 10,
+  smashDmg: 40,
   vibration: true,
 
   // Uppercut & juggle
@@ -49,10 +50,10 @@ export const CFG = {
   juggleX: 0.8,
 
   // Charged Punch (PAF maintenu)
-  chargeDelay: 0.28,
+  chargeDelay: 0.35,
   chargeFull: 0.9,
   chargeKnock: 1.6,
-  chargeWave: 2.6,
+  chargeWave: 1.8,
 
   // Saut
   jumpV: 6.2,
@@ -60,6 +61,7 @@ export const CFG = {
 
   // Saisie et projection
   grabTime: 2.5,
+  grabDelay: 0.3, // stick poussé contre l'ennemi avant la saisie (s)
   throwV: 7,
   throwUp: 4,
   throwDmg: 18,
@@ -75,6 +77,9 @@ export const CFG = {
   heroInvincible: false,
   enemySpeed: 2.05,
   enemyAggro: 1,
+  enemyWindup: 0.55, // vitesse de la préparation de l'attaque ennemie (plus bas = plus lisible)
+  enemyDmg: 7,
+  knockWindow: 4, // 3 coups encaissés dans cette fenêtre (s) : John tombe
 
   // Armes et objets à lancer
   durabilityMult: 1,

@@ -2,6 +2,7 @@
 // Sources : tactile (stick virtuel + bouton), manette (Gamepad API), clavier.
 const now = () => performance.now() / 1000;
 const DEAD = 0.2;
+const STICK_DEAD = 0.15; // zone morte du stick tactile (évite qu'un tremblement retourne John)
 
 export class Input {
   constructor() {
@@ -14,6 +15,9 @@ export class Input {
     this.gpPrev = {};
     this.onModeChange = null;
     this.onMenu = null;
+    this.onPause = null;
+    this.clock = now; // horloge du buffer : remplacée par le temps de jeu (le buffer suit hitstop et ralenti)
+    this.last = {}; // action -> dernier appui (temps réel)
     this._bindKeyboard();
     this._bindTouch();
     window.addEventListener('gamepadconnected', () => this._setMode('gamepad'));
@@ -27,7 +31,18 @@ export class Input {
   }
 
   press(action) {
-    this.presses.push({ action, t: now() });
+    this.presses.push({ action, t: this.clock(), rt: now() });
+    this.last[action] = now();
+  }
+
+  // Appui récent, sans le consommer (temps réel)
+  pressedWithin(action, age) {
+    return now() - (this.last[action] || -9) < age;
+  }
+
+  clear() {
+    this.presses.length = 0;
+    this.down = {};
   }
 
   hold(action, src, on) {
@@ -44,7 +59,7 @@ export class Input {
 
   // Consomme la pression la plus récente de moins de maxAge secondes (buffer d'input).
   take(action, maxAge) {
-    const t = now();
+    const t = this.clock();
     for (let i = this.presses.length - 1; i >= 0; i--) {
       const p = this.presses[i];
       if (p.action === action && t - p.t <= maxAge) {
@@ -73,6 +88,7 @@ export class Input {
       if (dge.includes(e.code)) this.press('dodge');
       if (jmp.includes(e.code)) { this.press('jump'); e.preventDefault(); }
       if (e.code === 'Backquote' || e.code === 'KeyG') this.onMenu && this.onMenu();
+      if (e.code === 'KeyP' || e.code === 'Escape') this.onPause && this.onPause();
     });
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
@@ -109,8 +125,10 @@ export class Input {
       let dy = e.clientY - this.stick.oy;
       const d = Math.hypot(dx, dy);
       if (d > R) { dx *= R / d; dy *= R / d; }
-      this.stick.x = dx / R;
-      this.stick.z = dy / R;
+      const k = Math.min(1, d / R);
+      const s = k < STICK_DEAD ? 0 : (k - STICK_DEAD) / (1 - STICK_DEAD) / (k || 1);
+      this.stick.x = (dx / R) * s;
+      this.stick.z = (dy / R) * s;
       knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     });
     const end = (e) => {
@@ -155,12 +173,13 @@ export class Input {
       b.forEach((p, i) => {
         if (p && !prev[i]) {
           any = true;
-          // A saute, X frappe (maintenu : charge), Y uppercut, B / RB roulade, Start réglages
+          // A saute, X frappe (maintenu : charge), Y smash, B / RB roulade, Start pause, Select réglages
           if (i === 0) this.press('jump');
           if (i === 2) this.press('attack');
           if (i === 3) this.press('upper');
           if (i === 1 || i === 5) this.press('dodge');
-          if (i === 9 && this.onMenu) this.onMenu();
+          if (i === 9 && this.onPause) this.onPause();
+          if (i === 8 && this.onMenu) this.onMenu();
         }
       });
       this.hold('attack', 'gp' + gp.index, b[2]);
@@ -204,6 +223,6 @@ export class Input {
     this.move.z = z;
     // purge des vieilles pressions
     const t = now();
-    this.presses = this.presses.filter((p) => t - p.t < 1);
+    this.presses = this.presses.filter((p) => t - p.rt < 2);
   }
 }

@@ -9,10 +9,11 @@ const JOG_SPEED = 3.0; // vitesse naturelle du clip Jog_Fwd_Loop (m/s), pour cal
 const ROLL_UP = 1.2; // instant du clip Roll où John est de nouveau debout
 const THROW_RELEASE = 0.36; // instant du clip OverhandThrow où la main lâche
 
-// John Max : débardeur et cargo noirs, bottes acier, bandages, tatouage Oni sur le bras droit.
+// John Max : débardeur noir, cargo gris acier, bottes acier, bandages, tatouage Oni sur le bras droit.
+// Pantalon plus clair que le trottoir et liseré orange plus large : John reste lisible sur le décor sombre.
 const LOOK = {
   body: 'male', hair: ['buzzed', 'beard'], saltPepper: true, spikes: { count: 60, len: 0.075 },
-  shirt: 0x17171b, pants: 0x222227, boots: 0x2a2c33, hands: 0x121212, tattoo: true, rim: 0xff8a3c,
+  shirt: 0x26272e, pants: 0x3a3d47, boots: 0x2a2c33, hands: 0x121212, tattoo: true, rim: 0xff8a3c, rimK: 1, rimPow: 2.6,
 };
 
 export class Hero extends Character {
@@ -33,6 +34,7 @@ export class Hero extends Character {
     this.held = null; // ennemi saisi
     this.special = 0; // jauge 0..100 : pleine, elle débloque le smash
     this.grabT = 0;
+    this.hits = []; // instants des derniers coups encaissés (mise à terre au 3e)
   }
 
   combo() {
@@ -65,6 +67,7 @@ export class Hero extends Character {
     if (this.special < 100) { this.game.ui.specialDenied(); sfx.denied(); return false; }
     this.special = 0;
     this.smashDone = false;
+    this.invuln = Math.max(this.invuln, 0.6); // la jauge ne se perd pas sur un coup pendant l'élan
     this.startAttack(0, SMASH);
     return true;
   }
@@ -88,7 +91,7 @@ export class Hero extends Character {
       const dir = Math.sign(e.x - this.x) || this.facing;
       const near = 1 - Math.min(1, Math.abs(e.x - this.x) / R) * 0.4; // plus fort au contact
       this.hitSet.add(e);
-      e.hp -= 22 * CFG.damageMult;
+      e.hp -= CFG.smashDmg * CFG.damageMult;
       e.bowled.clear();
       e.knock(dir * CFG.smashKnock * near, CFG.upperUp * 1.25);
       game.juice.flash(e.rig);
@@ -195,26 +198,47 @@ export class Hero extends Character {
   }
 
   hurt(dir) {
-    if (this.invuln > 0 || this.state === 'hurt') return false;
+    if (this.invuln > 0 || ['hurt', 'knock', 'down', 'getup'].includes(this.state)) return false;
     if (this.held) this.release();
     this.dropCarried();
     this.gainSpecial(CFG.specialHurt);
     if (this.state === 'charge') this.stopCharge();
-    const { juice } = this.game;
+    const { juice, time } = this.game;
     juice.flash(this.rig);
-    juice.shake(0.25);
+    juice.shake(0.3);
+    juice.hit(this.headPos(_p).setY(_p.y - 0.25), -dir, 0, null);
+    this.game.input.rumble(60, 0.5);
     sfx.hurt();
-    this.game.time.hitstop(0.05);
-    if (!CFG.heroInvincible) this.hp -= 7;
+    time.hitstop(0.06);
+    if (!CFG.heroInvincible) this.hp -= CFG.enemyDmg;
+    // 3 coups encaissés en peu de temps (ou plus de vie) : John tombe
+    const now = time.game;
+    this.hits = this.hits.filter((t) => now - t < CFG.knockWindow);
+    this.hits.push(now);
+    if (this.hp <= 0 || this.hits.length >= 3) { this.startKnock(dir); return true; }
     this.kx = dir * 2.5;
     this.invuln = 0.55;
     this.anim('Hit_Head', { fade: 0.05, restart: true });
     this.setState('hurt');
-    if (this.hp <= 0) {
-      this.hp = this.maxHp;
-      this.game.ui.message('K.O. ! On repart', 1.4);
-    }
     return true;
+  }
+
+  // Chute du héros : même mécanique que les ennemis (Hit_Knockback balistique, puis LayToIdle)
+  startKnock(dir) {
+    this.hits.length = 0;
+    if (this.weapon) this.weapon.dropFromHand(this);
+    this.A = null;
+    this.kx = 0;
+    this.vx = dir * 3.2;
+    this.vy = 3.6;
+    this.y = Math.max(this.y, 0.01);
+    this.facing = -dir;
+    this.invuln = 99;
+    this.anim('Hit_Knockback', { fade: 0.04, restart: true, speed: 1.1 });
+    this.game.juice.shake(0.5);
+    this.game.time.hitstop(0.1);
+    this.game.input.rumble(180, 0.9);
+    this.setState('knock');
   }
 
   update(dt) {
@@ -243,7 +267,7 @@ export class Hero extends Character {
       // saisie : pousser le stick contre un ennemi debout
       const grabTarget = this.grabCandidate(mx);
       this.grabT = grabTarget ? this.grabT + dt : 0;
-      if (grabTarget && this.grabT > 0.1) { this.grabT = 0; this.startGrab(grabTarget); }
+      if (grabTarget && this.grabT > CFG.grabDelay) { this.grabT = 0; this.startGrab(grabTarget); }
       else if (input.take('jump', CFG.inputBuffer)) this.startJump();
       else if (input.take('dodge', CFG.inputBuffer)) this.startDodge();
       else if (input.take('upper', CFG.inputBuffer)) this.tryUpper();
@@ -333,8 +357,34 @@ export class Hero extends Character {
       if (act.time >= 0.9) this.setState('free');
     }
 
+    if (this.state === 'knock') {
+      const a = this.model.actions.Hit_Knockback;
+      this.x += this.vx * dt;
+      if (this.y > 0) {
+        this.vy -= CFG.gravity * dt;
+        this.y += this.vy * dt;
+        a.timeScale = a.time > 0.22 ? 0 : 1.1;
+        if (this.y <= 0) {
+          this.y = 0; this.vy = 0; a.timeScale = 1.1;
+          sfx.thud(0.6); this.game.juice.dust(this.x, this.z, 1); this.game.juice.shake(0.2);
+        }
+      } else this.vx *= Math.exp(-CFG.groundDrag * dt);
+      if (this.y === 0 && (a.time >= a.getClip().duration - 0.02 || !a.isRunning())) this.setState('down');
+    }
+    if (this.state === 'down') {
+      this.x += this.vx * dt;
+      this.vx *= Math.exp(-CFG.groundDrag * dt);
+      if (this.hp <= 0) { if (this.t > 0.6 && !this.downSent) { this.downSent = true; this.game.onHeroDown(); } }
+      else if (this.t > 0.45) { this.downSent = false; this.anim('LayToIdle', { fade: 0.05, restart: true, speed: 1.3 }); this.setState('getup'); }
+    }
+    if (this.state === 'getup') {
+      const a = this.model.actions.LayToIdle;
+      this.invuln = 1;
+      if (!a.isRunning() || a.time >= a.getClip().duration - 0.05) this.setState('free');
+    }
+
     // retombée si un coup le surprend en l'air
-    if (this.state !== 'air' && this.y > 0) {
+    if (this.state !== 'air' && this.state !== 'knock' && this.y > 0) {
       this.vy -= CFG.gravity * dt;
       this.y = Math.max(0, this.y + this.vy * dt);
       if (this.y === 0) this.vy = 0;
@@ -384,9 +434,9 @@ export class Hero extends Character {
       if (ct < A.active[1]) this.x += this.facing * A.lunge * dt;
       if (!this.whooshed && ct >= A.active[0] * 0.7) { sfx.whoosh(A.heavy); this.whooshed = true; }
     }
-    // PAF maintenu pendant un coup : on bascule en charge
-    if (!A.charged && input.heldFor('attack') > CFG.chargeDelay) return this.startCharge();
     const canCancel = this.phase === 'rec' || ct >= A.cancel;
+    // PAF maintenu pendant un coup : on bascule en charge, seulement quand le coup peut s'annuler
+    if (canCancel && !A.charged && !A.weapon && input.heldFor('attack') > CFG.chargeDelay) return this.startCharge();
     if (canCancel && input.take('dodge', CFG.inputBuffer)) return this.startDodge();
     if (canCancel && input.take('jump', CFG.inputBuffer)) return this.startJump();
     if (canCancel && !A.smash && input.take('upper', CFG.inputBuffer) && this.tryUpper()) return;
@@ -401,10 +451,11 @@ export class Hero extends Character {
   }
 
   // Ennemi debout, juste devant, vers qui on pousse le stick
+  // Uniquement un ennemi sonné ou immobile, et pas juste après un PAF (on voulait frapper, pas saisir)
   grabCandidate(mx) {
-    if (this.weapon || this.carrying || Math.abs(mx) < 0.5) return null;
+    if (this.weapon || this.carrying || Math.abs(mx) < 0.5 || this.game.input.pressedWithin('attack', 0.25)) return null;
     for (const e of this.game.enemies) {
-      if (!e.hittable() || e.state === 'attack') continue;
+      if (!(e.state === 'hitstun' || (e.state === 'approach' && e.speed < 0.3))) continue;
       const dx = e.x - this.x;
       if (Math.sign(dx) === Math.sign(mx) && Math.abs(dx) < 0.78 && Math.abs(e.z - this.z) < 0.3) return e;
     }
@@ -422,7 +473,7 @@ export class Hero extends Character {
       const dx = (e.x - this.x) * this.facing;
       if (dx > 0 && dx < CFG.chargeWave * k && Math.abs(e.z - this.z) < 1) {
         this.hitSet.add(e);
-        resolveHit(this.game, this.A, e, _p.set(e.x, 1.2, e.z), 0.55);
+        resolveHit(this.game, this.A, e, _p.set(e.x, 1.2, e.z), 0.4);
       }
     }
   }

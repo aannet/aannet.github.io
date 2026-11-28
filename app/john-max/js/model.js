@@ -90,20 +90,21 @@ function clothAttribute(geo, skeleton, look) {
     } else if (look.tattoo && best === 'neck_01' && v.x < cx - 0.02 && t < 0.86) {
       if (Math.sin(v.y * 60 + v.z * 40) > 0.2) c = pal.ink;
     }
-    if (c) { out[i * 4] = c.r; out[i * 4 + 1] = c.g; out[i * 4 + 2] = c.b; out[i * 4 + 3] = 1; }
+    if (c) { out[i * 4] = c.r; out[i * 4 + 1] = c.g; out[i * 4 + 2] = c.b; out[i * 4 + 3] = c === pal.ink ? 0.6 : 1; }
   }
   geo.setAttribute('aCloth', new THREE.BufferAttribute(out, 4));
 }
 
 // Patch du shader toon : habit par sommet + liseré (rim) fresnel
-function patchToon(mat, rim) {
-  const rimColor = new THREE.Color(rim || 0x000000).multiplyScalar(0.55);
+function patchToon(mat, rim, k = 0.55, pw = 4) {
+  const rimColor = new THREE.Color(rim || 0x000000).multiplyScalar(k);
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uRim = { value: rimColor };
+    sh.uniforms.uRimPow = { value: pw };
     sh.vertexShader = 'attribute vec4 aCloth;\nvarying vec4 vCloth;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvCloth = aCloth;');
-    sh.fragmentShader = 'uniform vec3 uRim;\nvarying vec4 vCloth;\n' + sh.fragmentShader
+    sh.fragmentShader = 'uniform vec3 uRim;\nuniform float uRimPow;\nvarying vec4 vCloth;\n' + sh.fragmentShader
       .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vCloth.rgb, vCloth.a);')
-      .replace('#include <opaque_fragment>', 'outgoingLight += uRim * pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 4.0);\n#include <opaque_fragment>');
+      .replace('#include <opaque_fragment>', 'outgoingLight += uRim * pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), uRimPow);\n#include <opaque_fragment>');
   };
   mat.customProgramCacheKey = () => 'cloth-rim';
 }
@@ -131,7 +132,7 @@ export class Model {
         o.geometry = o.geometry.clone();
         clothAttribute(o.geometry, o.skeleton, look);
         if (look.skin) mat.color.set(look.skin);
-        patchToon(mat, look.rim);
+        patchToon(mat, look.rim, look.rimK, look.rimPow);
       } else if (/hair/i.test(src.name)) { // sourcils
         mat.map = null; mat.color.set(look.hairColor ?? 0x1b1512);
       }
@@ -213,7 +214,8 @@ export class Model {
     this.mixer.update(dt);
   }
 
-  setFlash(k) {
-    for (const m of this.mats) m.emissive.setRGB(k, k, k);
+  // Flash d'impact (blanc) ou teinte de télégraphie (couleur)
+  setFlash(k, color = null) {
+    for (const m of this.mats) color ? m.emissive.copy(color).multiplyScalar(k) : m.emissive.setRGB(k, k, k);
   }
 }

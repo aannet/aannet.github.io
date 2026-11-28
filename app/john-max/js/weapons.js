@@ -146,6 +146,16 @@ class Weapon {
     }
   }
 
+  // John tombe : l'arme lui échappe et rebondit au sol (pas reprise tout de suite)
+  dropFromHand(hero) {
+    hero.weapon = null;
+    this.group.getWorldPosition(_p);
+    this.group.removeFromParent();
+    this.drop(_p.x, _p.z, Math.max(0.6, _p.y));
+    this.body.setLinvel({ x: -hero.facing * 1.5, y: 3, z: 0 }, true);
+    this.noPick = 1.5;
+  }
+
   forceDrop() {
     const { hero, world } = this.game;
     if (this.state === 'held') { hero.weapon = null; this.group.removeFromParent(); if (hero.state === 'attack') hero.setState('free'); }
@@ -165,11 +175,12 @@ class Weapon {
       return;
     }
     if (this.state !== 'ground') return;
+    if (this.noPick > 0) this.noPick -= dt;
     const t = this.body.translation(), r = this.body.rotation();
     this.group.position.set(t.x, t.y, t.z);
     this.group.quaternion.set(r.x, r.y, r.z, r.w);
     const v = this.body.linvel();
-    if (!hero.weapon && !hero.carrying && hero.state === 'free' && t.y < 0.4 && Math.hypot(v.x, v.y, v.z) < 2.5 &&
+    if (!(this.noPick > 0) && !hero.weapon && !hero.carrying && hero.state === 'free' && t.y < 0.4 && Math.hypot(v.x, v.y, v.z) < 2.5 &&
         Math.hypot(t.x - hero.x, t.z - hero.z) < 0.6) this.pickUp(hero);
   }
 }

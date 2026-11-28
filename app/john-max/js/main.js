@@ -59,6 +59,7 @@ async function boot() {
   game.time = new GameTime();
   game.input = new Input();
   game.input.cfg = CFG;
+  game.input.clock = () => game.time.game;
   game.juice = new Juice(scene);
   game.ui = new UI(game);
   game.level = new Level(game);
@@ -83,6 +84,56 @@ async function boot() {
   const toggleGui = () => { guiOn = !guiOn; gui.show(guiOn); if (guiOn) gui.open(); };
   document.getElementById('btn-gui').addEventListener('click', toggleGui);
   game.input.onMenu = toggleGui;
+
+  // Pause (bouton ❚❚, P / Échap, Start) et écran K.O. : la boucle ne fait plus avancer le jeu
+  const pauseEl = document.getElementById('pause');
+  const pauseTitle = document.getElementById('pause-title'), pauseSub = document.getElementById('pause-sub');
+  const resumeBtn = document.getElementById('pause-resume');
+  game.paused = false;
+  let gameOver = false, continues = 0;
+  const setPause = (on) => {
+    if (gameOver && !on) return;
+    game.paused = on;
+    pauseEl.classList.toggle('on', on);
+    game.input.clear();
+  };
+  const togglePause = () => {
+    if (!loader.classList.contains('gone') || help.classList.contains('on') || gameOver) return;
+    setPause(!game.paused);
+  };
+  game.input.onPause = togglePause;
+  document.getElementById('btn-pause').addEventListener('click', togglePause);
+  document.addEventListener('visibilitychange', () => { if (document.hidden && loader.classList.contains('gone') && !game.paused) setPause(true); });
+  // John à 0 PV : il tombe, puis CONTINUER ? (vie pleine, les ennemis proches sont repoussés)
+  game.onHeroDown = () => {
+    gameOver = true;
+    pauseTitle.textContent = 'K.O.';
+    pauseSub.textContent = continues ? `CONTINUES UTILISÉS : ${continues}` : 'JOHN EST À TERRE';
+    resumeBtn.textContent = 'CONTINUER';
+    game.paused = true;
+    pauseEl.classList.add('on');
+    game.input.clear();
+  };
+  resumeBtn.addEventListener('click', () => {
+    if (gameOver) {
+      gameOver = false;
+      continues++;
+      const h = game.hero;
+      h.hp = h.maxHp;
+      h.invuln = 2;
+      for (const e of game.enemies) {
+        if (!e.hittable()) continue;
+        const d = e.x - h.x;
+        if (Math.abs(d) < 3) e.heavyHit({ x: (Math.sign(d) || 1) * CFG.knockHeavy, y: CFG.knockUp });
+      }
+      game.ui.message('CONTINUE', 1);
+      pauseTitle.textContent = 'PAUSE';
+      pauseSub.textContent = '';
+      resumeBtn.textContent = 'REPRENDRE';
+    }
+    setPause(false);
+  });
+  document.getElementById('pause-help').addEventListener('click', () => openHelp(true));
 
   // Caméra
   const camX = { v: game.hero.x };
@@ -163,6 +214,7 @@ async function boot() {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     game.input.poll();
+    if (game.paused) { requestAnimationFrame(frame); return; }
     game.time.advance(dt, tick);
     game.juice.update(dt);
     game.ui.update(dt);
@@ -192,7 +244,7 @@ async function boot() {
   document.getElementById('help-btn').addEventListener('click', () => openHelp(true));
   help.querySelector('.close').addEventListener('click', () => openHelp(false));
   help.addEventListener('click', (e) => { if (e.target === help) openHelp(false); });
-  window.addEventListener('keydown', (e) => { if (e.code === 'Escape') openHelp(false); });
+  window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && help.classList.contains('on')) { e.stopImmediatePropagation(); openHelp(false); } }, true);
 
   // démarrage uniquement par le bouton (clic, toucher, Entrée/Espace quand il a le focus)
   const play = document.getElementById('play');

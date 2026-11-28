@@ -13,18 +13,22 @@
 
 - Toutes les commandes sont listées dans le bouton AIDE de l'accueil.
 - Tactile : stick virtuel n'importe où sur la moitié gauche, bouton PAF à droite, SAUT (vert).
-- Tactile : bouton UP (orange) pour l'uppercut, ESQ (bleu) pour la roulade. PAF maintenu : Charged Punch.
-- Manette Bluetooth : reconnue au premier bouton. Stick gauche ou croix, X frapper (maintenu : Charged Punch), Y uppercut, A saut, B ou RB roulade, Start réglages.
-- Clavier : flèches ou ZQSD/WASD, J frapper (maintenu : Charged Punch), K uppercut, Espace saut, L ou Maj roulade, G réglages.
+- Tactile : bouton UP pour le smash (jauge pleine), ESQ pour la roulade, ❚❚ en haut à droite pour la pause. PAF maintenu : Charged Punch.
+- Manette Bluetooth : reconnue au premier bouton. Stick gauche ou croix, X frapper (maintenu : Charged Punch), Y smash, A saut, B ou RB roulade, Start pause, Select réglages.
+- Clavier : flèches ou ZQSD/WASD, J frapper (maintenu : Charged Punch), K smash, Espace saut, L ou Maj roulade, P ou Échap pause, G réglages.
 - Combo : jab, cross, crochet (le 3e coup projette l'ennemi). Avec la batte : 2 swings lourds.
 - Charged Punch : PAF maintenu. John se fige épaule en arrière, l'énergie orange monte au poing (halo, étincelles aspirées, zoom), puis le cross part au relâchement. Dégâts, projection et onde de choc à distance selon la charge ; ralenti à pleine charge.
 - Saut : contrôle réduit en l'air, un coup aérien par saut (fait tomber, rattrape les ennemis en l'air).
-- Saisie : pousser le stick contre un ennemi debout ; John le tient au col et peut avancer avec lui. Frapper le lance devant, UP (ou frapper + stick arrière) le lance derrière, par-dessus l'épaule (`OverhandThrow`). Il se libère après 2,5 s ; un coup reçu, un saut ou une roulade le relâchent.
+- Saisie : pousser le stick 0,3 s contre un ennemi sonné ou immobile (pas juste après un PAF) ; John le tient au col et peut avancer avec lui. Frapper le lance devant, UP (ou frapper + stick arrière) le lance derrière, par-dessus l'épaule (`OverhandThrow`). Il se libère après 2,5 s ; un coup reçu, un saut ou une roulade le relâchent.
 - Décor : un coup fort, la batte ou un ennemi projeté casse les caisses (deux coups légers aussi) ; les poubelles valsent ; un ennemi projeté traverse les vitrines des abribus, qui bloquent le passage tant qu'elles sont intactes. Tout réapparaît après 18 s, quand John est loin.
 - Roulade : direction du stick, invincible sur 75 % de la durée, annule la fin d'un coup ou la charge.
 - Jauge spéciale : se remplit à chaque coup donné (plus avec les coups forts, lancers, Charged Punch) et reçu. Pleine, elle débloque le smash sur UP ; avant, UP est éteint.
 - Smash : uppercut (crochet en lanceur) avec flash plein écran, ralenti, vibration du téléphone ou de la manette, onde de choc ; casse tout le décor cassable dans un rayon de 3 m et projette loin les ennemis proches (6 à 7 m, plus fort au contact).
-- Ancien uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
+- Smash : invincible 0,6 s pendant l'élan, 40 dégâts ; il doit battre le Charged Punch.
+- Attaque ennemie télégraphiée : l'ennemi rougit pendant la préparation (bip d'annonce). Pendant son attaque, jab et cross le blessent sans l'interrompre ; il faut un coup lourd, une arme, une saisie, ou esquiver.
+- John peut tomber : trois coups encaissés en 4 s, ou plus de vie. Il lâche son arme, se relève invincible 1 s. À 0 PV : écran K.O. et CONTINUER.
+- Charged Punch : ne se déclenche plus qu'aux fenêtres d'annulation d'un coup ; appui 0,35 s ; onde de choc 1,8 m.
+- Le buffer d'input compte en temps de jeu : un appui pendant le hitstop ou le ralenti n'est plus perdu.
 - Armes : marcher dessus pour les prendre. Batte (au fond à gauche, lourde), barre de fer (près du départ, rapide, 10 coups), panneau de signalisation (à droite, lent, très large, projette fort, 5 coups). Elles cassent à l'usure ; une du même type retombe 6 s plus tard.
 - Poubelle : frapper à côté d'une poubelle (sans ennemi tout près) la soulève ; frapper la lance devant, UP derrière. En vol, elle renverse les ennemis et casse caisses et vitrines, puis redevient un objet du décor.
 

@@ -6,13 +6,15 @@ import { sfx } from './audio.js';
 
 const _p = new THREE.Vector3();
 const WALK_SPEED = 1.5; // vitesse naturelle du clip Walk_Loop (m/s)
+// Vêtements un peu désaturés : le héros (liseré orange) doit rester le point focal
 const LOOKS = [
-  { body: 'male', hair: ['simpleparted'], hairColor: 0x7ad44f, shirt: 0xc8324a, pants: 0x33303d, boots: 0x1d1b22, rim: 0x4fb8ff },
-  { body: 'male', hair: ['buzzed'], hairColor: 0xf2b134, skin: 0xb98a6a, shirt: 0x7b4fd0, pants: 0x4f5b3a, boots: 0xe8e2d0, rim: 0x4fb8ff },
-  { body: 'female', hair: ['long'], hairColor: 0xe84a5f, shirt: 0x2f9a8f, pants: 0x2c2c3a, boots: 0x1d1b22, rim: 0x4fb8ff },
+  { body: 'male', hair: ['simpleparted'], hairColor: 0x6fae55, shirt: 0xa8445a, pants: 0x33303d, boots: 0x1d1b22, rim: 0x4fb8ff },
+  { body: 'male', hair: ['buzzed'], hairColor: 0xd2a24c, skin: 0xb98a6a, shirt: 0x6a57a8, pants: 0x4f5b3a, boots: 0xe8e2d0, rim: 0x4fb8ff },
+  { body: 'female', hair: ['long'], hairColor: 0xc0566a, shirt: 0x3a8178, pants: 0x2c2c3a, boots: 0x1d1b22, rim: 0x4fb8ff },
 ];
 // Attaque ennemie : cross ralenti pour être lisible. Temps en secondes de clip.
 const ATK = { clip: 'Punch_Cross', active: [0.22, 0.34], end: 0.8 };
+const WARN = new THREE.Color(1, 0.12, 0.08);
 
 export class Enemy extends Character {
   constructor(game, idx) {
@@ -41,6 +43,16 @@ export class Enemy extends Character {
     this.game.scene.add(g);
     this.bar = g;
     this.barFill = fill;
+  }
+
+  setState(s) {
+    if (this.warned && s !== 'attack') { this.warned = false; this.model.setFlash(0); }
+    super.setState(s);
+  }
+
+  // Armure de l'attaque : les coups légers blessent sans interrompre
+  armored() {
+    return this.state === 'attack';
   }
 
   hittable() {
@@ -121,6 +133,7 @@ export class Enemy extends Character {
   }
 
   walkAnim(v) {
+    this.speed = v;
     if (v > 0.15) this.anim('Walk_Loop', { fade: 0.2, speed: Math.max(0.5, v / (WALK_SPEED * CFG.animSpeed)) });
     else this.anim('Guard', { fade: 0.25, speed: 0, loop: true });
   }
@@ -161,8 +174,10 @@ export class Enemy extends Character {
         this.walkAnim(Math.hypot(mx, mz) / dt);
         lean = -Math.sign(mz) * Math.min(0.5, Math.abs(mz / dt));
         if (mine && Math.abs(hero.x - this.x) < 1.15 && Math.abs(hero.z - this.z) < 0.28) {
-          this.anim(ATK.clip, { fade: 0.08, restart: true, speed: 0.75 * CFG.enemyAggro });
+          this.anim(ATK.clip, { fade: 0.08, restart: true, speed: CFG.enemyWindup * CFG.enemyAggro });
           this.struck = false;
+          this.whoosh = false;
+          sfx.warn();
           this.setState('attack');
         }
         break;
@@ -170,8 +185,13 @@ export class Enemy extends Character {
       case 'attack': {
         // préparation lisible (clip ralenti), frappe pendant la fenêtre active, puis retour en garde
         const ct = this.model.actions[ATK.clip].time;
-        if (ct < ATK.active[0]) this.facing = toHero;
-        else if (ct < ATK.active[1]) {
+        // télégraphie : il rougit pendant la préparation (pulsation qui monte jusqu'à la frappe)
+        if (ct < ATK.active[0]) {
+          this.facing = toHero;
+          this.model.setFlash(0.25 + 0.5 * (ct / ATK.active[0]), WARN);
+          this.warned = true;
+        } else if (this.warned) { this.warned = false; this.model.setFlash(0); }
+        if (ct < ATK.active[0]) { /* préparation */ } else if (ct < ATK.active[1]) {
           this.x += this.facing * 1.0 * dt;
           if (!this.whoosh) { sfx.whoosh(false); this.whoosh = true; }
           this.tip('fistR', _p);

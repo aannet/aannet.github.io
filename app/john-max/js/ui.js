@@ -127,6 +127,7 @@ export function buildGui(GUI, game) {
   sp.add(CFG, 'specialHurt', 0, 40, 1).name('gain coup reçu');
   sp.add(CFG, 'smashRadius', 1, 6, 0.1).name('rayon du smash (m)');
   sp.add(CFG, 'smashKnock', 2, 20, 0.5).name('projection du smash');
+  sp.add(CFG, 'smashDmg', 0, 100, 1).name('dégâts du smash');
   sp.add(CFG, 'vibration').name('vibrations');
   sp.add({ go: () => { game.hero.special = 100; } }, 'go').name('remplir la jauge');
 
@@ -139,6 +140,7 @@ export function buildGui(GUI, game) {
   ch.add(CFG, 'airControl', 0, 1.2, 0.05).name('contrôle en l\'air');
   ch.add(CFG, 'throwV', 2, 14, 0.5).name('force du lancer');
   ch.add(CFG, 'grabTime', 0.5, 6, 0.1).name('durée de la prise (s)');
+  ch.add(CFG, 'grabDelay', 0, 1, 0.05).name('poussée avant saisie (s)');
   ch.add(CFG, 'dodgeDist', 1, 5, 0.1).name('distance roulade (m)');
   ch.add(CFG, 'dodgeInvuln', 0, 1, 0.05).name('part invincible');
 
@@ -146,6 +148,9 @@ export function buildGui(GUI, game) {
   cb.add(CFG, 'inputBuffer', 0, 0.5, 0.01).name('buffer input (s)');
   cb.add(CFG, 'damageMult', 0.2, 5, 0.1).name('dégâts ×');
   cb.add(CFG, 'enemyAggro', 0.3, 3, 0.1).name('agressivité');
+  cb.add(CFG, 'enemyWindup', 0.3, 1.2, 0.05).name('préparation ennemie (vitesse)');
+  cb.add(CFG, 'enemyDmg', 0, 30, 1).name('dégâts ennemis');
+  cb.add(CFG, 'knockWindow', 0, 10, 0.5).name('fenêtre mise à terre (s)');
   cb.add(CFG, 'heroInvincible').name('héros invincible');
 
   const b = f('Armes');
@@ -156,16 +161,16 @@ export function buildGui(GUI, game) {
   const d = f('Scène');
   d.add({ go: () => game.level.resetProps() }, 'go').name('replacer le décor');
   d.add({ go: () => game.enemies.forEach((e) => e.respawn()) }, 'go').name('respawn ennemis');
-  d.add({ go: () => { try { localStorage.setItem('btaCfg', JSON.stringify(CFG)); game.ui.message('Réglages gardés', 0.8); } catch (e) {} } }, 'go').name('garder ces réglages');
+  d.add({ go: () => { try { localStorage.setItem('btaCfg2', JSON.stringify(CFG)); game.ui.message('Réglages gardés', 0.8); } catch (e) {} } }, 'go').name('garder ces réglages');
   d.add({ go: () => { navigator.clipboard?.writeText(JSON.stringify(CFG, null, 2)).then(() => game.ui.message('Copié', 0.8)).catch(() => {}); } }, 'go').name('copier les réglages (JSON)');
-  d.add({ go: () => { try { localStorage.removeItem('btaCfg'); } catch (e) {} location.reload(); } }, 'go').name('réglages par défaut');
+  d.add({ go: () => { try { localStorage.removeItem('btaCfg2'); } catch (e) {} location.reload(); } }, 'go').name('réglages par défaut');
   for (const folder of gui.folders) folder.close();
   return gui;
 }
 
 export function loadSavedCfg() {
   try {
-    const s = localStorage.getItem('btaCfg');
+    const s = localStorage.getItem('btaCfg2');
     if (s) Object.assign(CFG, JSON.parse(s));
   } catch (e) { /* stockage indisponible */ }
 }

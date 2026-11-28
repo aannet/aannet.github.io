@@ -183,6 +183,15 @@ export const sfx = {
     noiseBurst(t, 0.9, 260, 0.5, 1, 'lowpass', shaper);
     noiseBurst(t + 0.03, 0.25, 3000, 0.8, 0.6, 'highpass');
   },
+  // Annonce d'une attaque ennemie : petit « tchk » aigu, court
+  warn() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square'; o.frequency.setValueAtTime(1800, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.06);
+    g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    o.connect(g).connect(master); o.start(t); o.stop(t + 0.09);
+  },
   metal() {
     if (!ctx) return;
     const t = ctx.currentTime;
