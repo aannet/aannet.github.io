@@ -198,7 +198,7 @@ export class Hero extends Character {
     e.facing = -this.facing;
   }
 
-  hurt(dir) {
+  hurt(dir, dmg = CFG.enemyDmg, heavy = false) {
     if (this.invuln > 0 || ['hurt', 'knock', 'down', 'getup'].includes(this.state)) return false;
     if (this.held) this.release();
     this.dropCarried();
@@ -211,12 +211,12 @@ export class Hero extends Character {
     this.game.input.rumble(60, 0.5);
     sfx.hurt();
     time.hitstop(0.06);
-    if (!CFG.heroInvincible) this.hp -= CFG.enemyDmg;
+    if (!CFG.heroInvincible) this.hp -= dmg;
     // 3 coups encaissés en peu de temps (ou plus de vie) : John tombe
     const now = time.game;
     this.hits = this.hits.filter((t) => now - t < CFG.knockWindow);
     this.hits.push(now);
-    if (this.hp <= 0 || this.hits.length >= 3) { this.startKnock(dir); return true; }
+    if (heavy || this.hp <= 0 || this.hits.length >= 3) { this.startKnock(dir); return true; }
     this.kx = dir * 2.5;
     this.invuln = 0.55;
     this.anim('Hit_Head', { fade: 0.05, restart: true });
@@ -456,7 +456,7 @@ export class Hero extends Character {
   grabCandidate(mx) {
     if (this.weapon || this.carrying || Math.abs(mx) < 0.5 || this.game.input.pressedWithin('attack', 0.25)) return null;
     for (const e of this.game.enemies) {
-      if (!(e.state === 'hitstun' || (e.state === 'approach' && e.speed < 0.3))) continue;
+      if (!e.grabbable() || !(e.state === 'hitstun' || e.state === 'stun' || (e.state === 'approach' && e.speed < 0.3))) continue;
       const dx = e.x - this.x;
       if (Math.sign(dx) === Math.sign(mx) && Math.abs(dx) < 0.78 && Math.abs(e.z - this.z) < 0.3) return e;
     }

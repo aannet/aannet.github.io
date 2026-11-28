@@ -6,8 +6,11 @@ import { Decor } from './decor.js';
 import { Breakables } from './breakables.js';
 import { sfx } from './audio.js';
 
+// Bornes de jeu courantes (mutées par stage.js : zone verrouillée / ouverte). STAGE = étendue totale.
 export const ARENA = { minX: -9, maxX: 9, minZ: -1.45, maxZ: 1.15, wallZ: -2.0, frontZ: 1.9 };
+export const STAGE = { minX: -9, maxX: 63 };
 const LAMPS = [-5.5, 4.5];
+const TILE = 30; // la rue décorée fait 30 m, deux copies se relaient autour de la caméra
 
 function canvasTex(w, h, draw, rx = 1, ry = 1) {
   const c = document.createElement('canvas');
@@ -22,7 +25,7 @@ function canvasTex(w, h, draw, rx = 1, ry = 1) {
 
 const toon = (color, map) => new THREE.MeshToonMaterial(map ? { color, map, gradientMap: toonGradient() } : { color, gradientMap: toonGradient() });
 
-const PROP_DEFS = [
+const BASE_PROPS = [
   { kind: 'crate', x: 2.6, z: -1.2, y: 0.28 },
   { kind: 'crate', x: 2.6, z: -1.2, y: 0.84 },
   { kind: 'crate', x: 3.2, z: -1.25, y: 0.28 },
@@ -33,6 +36,12 @@ const PROP_DEFS = [
   { kind: 'crate', x: 6.6, z: -1.1, y: 0.28 },
   { kind: 'can', x: 7.3, z: -1.3, y: 0.36 },
   { kind: 'crate', x: -6.5, z: -1.2, y: 0.28 },
+];
+// Les 3 premières zones reprennent la disposition de base décalée ; une caisse isolée par zone cache de la nourriture
+const PROP_DEFS = [
+  ...[0, 18, 36].flatMap((off) => BASE_PROPS.map((d) => ({ ...d, x: d.x + off, food: off > 0 && d.x === -4.2 }))),
+  { kind: 'can', x: 47.5, z: -1.35, y: 0.36 }, { kind: 'can', x: 60.5, z: 0.9, y: 0.36 },
+  { kind: 'crate', x: 49, z: 0.7, y: 0.28, food: true }, { kind: 'crate', x: 59, z: -1.2, y: 0.28, food: true },
 ];
 
 export class Level {
@@ -59,6 +68,7 @@ export class Level {
       for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(90,110,170,${Math.random() * 0.18})`; g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 4 + Math.random() * 14, 2 + Math.random() * 5, 0, 0, 7); g.fill(); }
       g.strokeStyle = '#17151e'; g.lineWidth = 3; g.strokeRect(0, 0, w, h);
     }, 30, 3.4);
+    const tile = new THREE.Group();
     const walk = new THREE.Mesh(new THREE.PlaneGeometry(30, 3.4), toon(0xffffff, walkTex));
     walk.rotation.x = -Math.PI / 2;
     walk.position.set(0, 0, -0.35);
@@ -72,7 +82,7 @@ export class Level {
     road.position.set(0, -0.02, 4.85);
     const curb = new THREE.Mesh(new THREE.BoxGeometry(30, 0.1, 0.18), toon(0x4a4756));
     curb.position.set(0, 0.03, 1.38);
-    scene.add(walk, road, curb);
+    tile.add(walk, road, curb);
 
     // Lampadaires : géométries fusionnées en un mesh
     const M = new THREE.Matrix4();
@@ -82,14 +92,18 @@ export class Level {
       parts.push(new THREE.BoxGeometry(0.5, 0.12, 0.25).applyMatrix4(M.makeTranslation(x + 0.2, 3.6, -1.6)));
     }
     const poles = new THREE.Mesh(mergeGeometries(parts), toon(0x24232e));
-    scene.add(poles);
+    tile.add(poles);
     const bulbs = new THREE.Mesh(
       mergeGeometries(LAMPS.map((x) => new THREE.BoxGeometry(0.3, 0.05, 0.15).applyMatrix4(M.makeTranslation(x + 0.3, 3.53, -1.6)))),
       new THREE.MeshBasicMaterial({ color: 0xffd9a0 })
     );
-    scene.add(bulbs);
+    tile.add(bulbs);
 
-    this.decor = new Decor(scene, LAMPS);
+    this.decor = new Decor(scene, LAMPS, tile);
+    // deuxième tuile : même géométrie et matériaux (clone léger), vapeur figée masquée
+    this.tiles = [tile, tile.clone()];
+    this.tiles[1].traverse((o) => { if (o.isSprite) o.visible = false; });
+    scene.add(...this.tiles);
 
     // Physique statique
     const st = groups(G.STATIC, 0xffff);
@@ -97,12 +111,13 @@ export class Level {
       const b = world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(x, y, z));
       world.createCollider(R.ColliderDesc.cuboid(hx, hy, hz).setFriction(0.9).setCollisionGroups(st), b);
     };
-    fixed(30, 0.5, 20, 0, -0.5, 0);
-    fixed(30, 5, 0.2, 0, 4, ARENA.wallZ - 0.2);
-    fixed(30, 5, 0.2, 0, 4, ARENA.frontZ + 0.2);
-    fixed(0.2, 5, 5, ARENA.maxX + 0.8, 4, 0);
-    fixed(0.2, 5, 5, ARENA.minX - 0.8, 4, 0);
-    for (const x of LAMPS) {
+    const cx = (STAGE.minX + STAGE.maxX) / 2, hx = (STAGE.maxX - STAGE.minX) / 2 + 10;
+    fixed(hx, 0.5, 20, cx, -0.5, 0);
+    fixed(hx, 5, 0.2, cx, 4, ARENA.wallZ - 0.2);
+    fixed(hx, 5, 0.2, cx, 4, ARENA.frontZ + 0.2);
+    fixed(0.2, 5, 5, STAGE.maxX + 0.8, 4, 0);
+    fixed(0.2, 5, 5, STAGE.minX - 0.8, 4, 0);
+    for (const x of [0, 1, 2].flatMap((k) => LAMPS.map((l) => l + k * TILE))) {
       const b = world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(x, 1.8, -1.6));
       world.createCollider(R.ColliderDesc.cylinder(1.8, 0.09).setCollisionGroups(st), b);
     }
@@ -165,6 +180,10 @@ export class Level {
 
   // Appelé à chaque frame (temps réel) : pluie, vapeur, débris
   update(camX, t, dt) {
+    // tuiles de rue : l'une centrée sur le multiple de 30 m le plus proche, l'autre du côté où regarde la caméra
+    const base = Math.round(camX / TILE) * TILE;
+    this.tiles[0].position.x = base;
+    this.tiles[1].position.x = base + (camX >= base ? TILE : -TILE);
     this.breakables.update(dt);
     this.decor.update(t, camX, dt);
   }

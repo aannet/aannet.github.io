@@ -8,6 +8,8 @@ import { sfx } from './audio.js';
 const GLASS = [
   { x: -6.6, z0: -1.45, z1: -0.45 },
   { x: 5.9, z0: -0.2, z1: 0.8 },
+  { x: 29.4, z0: -1.45, z1: -0.45 },
+  { x: 41.9, z0: -0.2, z1: 0.8 },
 ];
 const RESPAWN = 18;
 const WOOD = [0.75, 0.48, 0.22], SHARD = [0.75, 0.92, 1];
@@ -87,6 +89,7 @@ export class Breakables {
     scene.remove(p.mesh);
     world.removeRigidBody(p.body);
     this.level.props.splice(this.level.props.indexOf(p), 1);
+    if (p.def.food && !p.def.eaten) { p.def.eaten = true; this.game.stage.food(t.x, t.z); }
     for (let i = 0; i < 6; i++) {
       const m = toonMesh(this.plankGeo, this.level.crateMat, scene, false);
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 3, Math.random() * 3, Math.random() * 3));

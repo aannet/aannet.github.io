@@ -54,9 +54,9 @@ export class Character {
   }
 
   clampArena() {
-    this.x = Math.max(ARENA.minX, Math.min(ARENA.maxX, this.x));
+    if (this.state !== 'enter') this.x = Math.max(ARENA.minX, Math.min(ARENA.maxX, this.x));
     this.z = Math.max(ARENA.minZ, Math.min(ARENA.maxZ, this.z));
-    if (this.y === 0 && !['knock', 'grabbed', 'down'].includes(this.state)) this.game.level.breakables?.block(this, this.lastX ?? this.x);
+    if (this.y === 0 && !['knock', 'grabbed', 'down', 'enter'].includes(this.state)) this.game.level.breakables?.block(this, this.lastX ?? this.x);
     this.lastX = this.x;
   }
 
@@ -81,7 +81,8 @@ export class Character {
 
   // Distance d'un point à la capsule « hurtbox » du perso debout
   hurtDist(p) {
-    const y = Math.max(0.25 + this.y, Math.min(1.65 + this.y, p.y));
+    const s = this.hScale || 1;
+    const y = Math.max(0.25 * s + this.y, Math.min(1.65 * s + this.y, p.y));
     return Math.hypot(p.x - this.x, p.y - y, p.z - this.z);
   }
 

@@ -62,10 +62,11 @@ export const TYPES = {
   },
 };
 
+// une arme par zone (le boss se combat à mains nues ou avec ce qu'on a gardé)
 const SPAWNS = [
   { type: 'bat', x: -6.8, z: 0.3 },
-  { type: 'pipe', x: -1.4, z: 1.0 },
-  { type: 'sign', x: 7.6, z: -0.6 },
+  { type: 'pipe', x: 14, z: 1.0 },
+  { type: 'sign', x: 34.5, z: -0.6 },
 ];
 const _p = new THREE.Vector3(), _q = new THREE.Quaternion();
 
@@ -270,7 +271,7 @@ export class Weapons {
           f.hit.add(e);
           e.hp -= 20 * CFG.damageMult;
           e.bowled.clear();
-          e.knock(f.dir * CFG.knockHeavy * 1.3, CFG.knockUp);
+          if (!(e.T.boss && e.hp > 0)) e.knock(f.dir * CFG.knockHeavy * 1.3, CFG.knockUp); // le boss encaisse
           game.juice.flash(e.rig);
           game.juice.hit(_p.set(t.x, t.y, t.z), f.dir, 1, e.headPos(new THREE.Vector3()));
           game.time.hitstop(CFG.hitstopHeavy);

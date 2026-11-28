@@ -45,7 +45,7 @@ function skyline(g, w, h, base, lit, density, top) {
 // Immeubles derrière la rue : un seul plan découpé (alphaTest), seule la bande au-dessus de la façade se voit
 function backdrop(scene) {
   const mid = canvas(1024, 256, (g, w, h) => { skyline(g, w, h, '#11121d', WARM, 0.18, 0.4); });
-  const midM = new THREE.Mesh(new THREE.PlaneGeometry(50, 12), new THREE.MeshBasicMaterial({ map: mid, alphaTest: 0.5, fog: true }));
+  const midM = new THREE.Mesh(new THREE.PlaneGeometry(W, 12), new THREE.MeshBasicMaterial({ map: mid, alphaTest: 0.5, fog: true }));
   midM.position.set(0, 6, -7);
   scene.add(midM);
 }
@@ -241,13 +241,14 @@ function steam(scene) {
   return list;
 }
 
+// tile : groupe d'une tuile de rue (recyclée par level.js) ; la pluie suit la caméra, elle va dans la scène
 export class Decor {
-  constructor(scene, lampXs) {
-    backdrop(scene);
-    facade(scene);
-    neons(scene, lampXs);
+  constructor(scene, lampXs, tile) {
+    backdrop(tile);
+    facade(tile);
+    neons(tile, lampXs);
     this.rainU = rain(scene);
-    this.steam = steam(scene);
+    this.steam = steam(tile);
   }
 
   update(t, camX, dt) {

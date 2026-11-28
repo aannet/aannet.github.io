@@ -5,7 +5,8 @@ import { Input } from './input.js';
 import { Juice } from './juice.js';
 import { Level, ARENA } from './level.js';
 import { Hero } from './hero.js';
-import { Enemy } from './enemy.js';
+import { Hazards } from './enemy.js';
+import { Stage } from './stage.js';
 import { Weapons } from './weapons.js';
 import { Blobs } from './blobs.js';
 import { UI, buildGui, loadSavedCfg } from './ui.js';
@@ -55,7 +56,7 @@ async function boot() {
   const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 60);
   const world = new R.World({ x: 0, y: -CFG.gravity, z: 0 });
 
-  const game = { R, world, scene, camera, renderer, CFG, token: null, applyRes, lib };
+  const game = { R, world, scene, camera, renderer, CFG, tokens: new Set(), camX: -3, applyRes, lib };
   game.time = new GameTime();
   game.input = new Input();
   game.input.cfg = CFG;
@@ -64,7 +65,9 @@ async function boot() {
   game.ui = new UI(game);
   game.level = new Level(game);
   game.hero = new Hero(game);
-  game.enemies = [new Enemy(game, 0), new Enemy(game, 1)];
+  game.enemies = []; // ennemis actifs (le pool est dans stage.js)
+  game.bottles = new Hazards(game);
+  game.stage = new Stage(game);
   game.weapons = new Weapons(game);
   game.blobs = new Blobs(scene);
 
@@ -72,8 +75,9 @@ async function boot() {
     enemy.ko = true;
     enemy.die();
     game.ui.ko();
+    if (enemy.T.boss) { game.stage.bossDown(); game.ui.message('K.O.', 2); return; }
     const standing = game.enemies.filter((e) => e !== enemy && !e.ko);
-    if (standing.length === 0) {
+    if (standing.length === 0 && !game.stage.queue.length) {
       game.time.slowmo(CFG.slowmoDuration);
       game.juice.camPunch(CFG.camPunch * 1.6);
       game.ui.message('K.O.', 1.2);
@@ -116,7 +120,19 @@ async function boot() {
     pauseEl.classList.add('on');
     game.input.clear();
   };
+  // Boss vaincu : bilan et rejouer
+  let won = false;
+  game.onStageClear = ({ time, kos }) => {
+    won = gameOver = true;
+    const m = Math.floor(time / 60), sec = String(Math.floor(time % 60)).padStart(2, '0');
+    pauseTitle.textContent = 'STAGE CLEAR';
+    pauseSub.textContent = `KO ${kos} · TEMPS ${m}:${sec} · CONTINUES ${continues}`;
+    resumeBtn.textContent = 'REJOUER';
+    game.paused = true;
+    pauseEl.classList.add('on');
+  };
   resumeBtn.addEventListener('click', () => {
+    if (won) { location.reload(); return; }
     if (gameOver) {
       gameOver = false;
       continues++;
@@ -168,6 +184,7 @@ async function boot() {
   function updateCamera(dt) {
     const target = Math.max(ARENA.minX + 4.6, Math.min(ARENA.maxX - 4.6, game.hero.x + game.hero.facing * 0.6));
     camX.v += (target - camX.v) * (1 - Math.exp(-4 * dt));
+    game.camX = camX.v;
     game.juice.cameraOffset(shake);
     camera.position.set(camX.v + shake.x, 2.9 + shake.y, 7.4);
     look.set(camX.v + shake.x * 0.5, 1.0 + shake.y * 0.5, -0.45);
@@ -195,7 +212,7 @@ async function boot() {
   function bowling() {
     if (!CFG.bowling) return;
     for (const a of game.enemies) {
-      const targets = (p) => game.enemies.filter((b) => b !== a && b.hittable() && !a.bowled.has(b) && Math.hypot(p.x - b.x, p.z - b.z) < 0.5 && p.y < 1.8);
+      const targets = (p) => game.enemies.filter((b) => b !== a && !b.T.boss && b.hittable() && !a.bowled.has(b) && Math.hypot(p.x - b.x, p.z - b.z) < 0.5 && p.y < 1.8);
       if (a.state === 'knock' && Math.abs(a.vx) > 2.5) {
         const p = { x: a.x + Math.sign(a.vx) * 0.3, y: a.y + 0.6, z: a.z };
         for (const b of targets(p)) bowlHit(a, b, p, { x: a.vx, y: a.vy });
@@ -232,6 +249,8 @@ async function boot() {
     bowling();
     game.level.sync(gdt);
     game.weapons.update(gdt);
+    game.bottles.update(gdt);
+    game.stage.update(gdt);
   }
 
   // Portrait du HUD : photo du héros (vrai modèle, pose de garde) prise une fois dans une cible de 96 px
@@ -292,6 +311,7 @@ async function boot() {
   const start = () => {
     unlockAudio();
     game.paused = false;
+    game.stage.start();
     loader.classList.add('gone');
   };
   // aide : panneau des commandes, fermé par ✕, Échap ou un toucher hors de la carte

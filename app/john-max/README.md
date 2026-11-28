@@ -9,6 +9,19 @@
 - En ligne : pousser le dossier dans `aannet.github.io/app/<nom>/`, ouvrir l'URL sur le téléphone.
 - En local : `npx serve .` (ou `python3 -m http.server`) puis ouvrir `http://localhost:3000`. Le `file://` ne marche pas (modules ES).
 
+## Stage 1 (Jalon 3)
+
+Une rue de 72 m en 4 zones. La caméra se verrouille sur chaque zone tant que ses vagues ne sont pas vaincues ; « GO » ouvre la suivante (pas de retour hors champ). Vagues décrites dans `js/stage.js` (`ZONES`), entrées alternées droite / gauche.
+
+- Voyou : coup de poing télégraphié (il rougit).
+- Fonceur : s'aligne, rougit, charge en ligne et renverse John. Esquive par roulade ou saut ; après la charge il est sonné ~0,9 s.
+- Costaud : plus grand, barre de fer à la main, insensible aux coups légers, impossible à saisir, son coup renverse. Coup lourd, arme, charge ou smash.
+- Lanceuse : garde ses distances, change de couloir, lance des bouteilles visées là où est John.
+- Boss ONI (520 PV, barre dédiée) : combo de 3 coups, charge, saut avec onde de choc au sol (sauter au passage de l'anneau). Il encaisse tout sans broncher sauf quand il est sonné (après chacune de ses attaques, 5 coups max) ; saisissable seulement sonné ; le smash le met à terre. À mi-vie il s'énerve (plus rapide, plus de sauts) et appelle deux voyous.
+- Jetons d'attaque : 1 au corps à corps, 2 à partir de 3 ennemis.
+- Nourriture : une caisse par zone cache un bol de ramen (+30 PV).
+- Boss KO : ralenti, ses sbires tombent avec lui, écran STAGE CLEAR (KO, temps, continues) et REJOUER.
+
 ## Contrôles
 
 - Toutes les commandes sont listées dans le bouton AIDE de l'accueil.
@@ -49,7 +62,8 @@ Tout le game feel est réglable en direct : vitesse des animations, hitstop, sha
 | `model.js` | Personnage riggé Quaternius : toon, contour skinné, liseré, habillage par sommet selon l'os dominant, AnimationMixer |
 | `toon.js` | Dégradé toon et contour des objets statiques |
 | `character.js` | Base héros/ennemis : modèle, clips, capsule cinématique, hauteur en l'air |
-| `hero.js` / `enemy.js` | Combo + buffer, IA à jeton d'attaque, états de réaction, choix des clips |
+| `hero.js` / `enemy.js` | Combo + buffer ; types d'ennemis (voyou, fonceur, costaud, lanceuse, boss) en table, IA à jetons, télégraphie, bouteilles et onde de choc (`Hazards`) |
+| `stage.js` | Zones, vagues, verrouillage caméra, GO, pool d'ennemis, boss, nourriture, fin de stage |
 | `combat.js` | Coups calés sur les clips (fenêtres en secondes de clip), résolution des coups, juggle |
 | `juice.js` / `audio.js` | Shake, punch, flash, étincelles, étoiles d'impact, sons synthétisés |
 | `level.js` | Rue jouable : physique statique, décor poussable, éclairage |
@@ -59,6 +73,9 @@ Tout le game feel est réglable en direct : vitesse des animations, hitstop, sha
 | `weapons.js` | Armes ramassables (batte, barre de fer, panneau : forme, combo, durabilité), poubelle à soulever et lancer |
 
 ## Choix d'optimisation (feintes assumées)
+
+- Rue infinie à coût fixe : le décor fait 30 m ; deux copies (mêmes géométries et matériaux) se relaient autour de la caméra. Le stage de 72 m ne coûte pas un draw call de plus qu'une rue de 60 m.
+- Pool d'ennemis fixe (7 modèles chargés au démarrage, 4 à l'écran au maximum) : aucun modèle créé pendant la partie ; les inactifs sont masqués et ne sont pas mis à jour.
 
 - Rendu à 540 lignes avec MSAA, agrandi en douceur : 2 à 3× moins de pixels qu'en natif. À 360 lignes ou moins, agrandissement `pixelated` pour un look pixel art (⚙ > Rendu).
 - Vignettage qui vacille en CSS, par-dessus le canvas : aucun coût de rendu 3D.

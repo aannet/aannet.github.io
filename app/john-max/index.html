@@ -87,6 +87,20 @@
   #combo .seg { height: 9px; outline: 1px solid rgba(255,138,60,.7); outline-offset: 1px; }
   #combo .seg > div { width: 100%; background: linear-gradient(90deg, #ff6a24, #ffb35c); transition: none; }
 
+  /* GO : la zone suivante est ouverte */
+  #go { position: absolute; right: max(4%, env(safe-area-inset-right)); top: 34%; display: none; align-items: center; gap: 6px;
+    font: 400 clamp(30px, 6vw, 54px)/1 'Russo One', sans-serif; color: #fff; letter-spacing: .06em; text-shadow: 0 0 12px var(--neon), 3px 0 var(--hot); animation: goBlink .7s steps(2) infinite; }
+  #go.on { display: flex; }
+  #go i { width: 0; height: 0; border: 18px solid transparent; border-left: 26px solid var(--neon); border-right: 0; filter: drop-shadow(0 0 8px var(--neon)); }
+  @keyframes goBlink { 50% { opacity: .25; } }
+  /* barre du boss : en bas au centre, entre la croix et les boutons */
+  .glow-h { filter: drop-shadow(0 0 6px rgba(255,61,110,.6)); }
+  #boss { position: absolute; left: 50%; bottom: max(8px, env(safe-area-inset-bottom)); transform: translateX(-62%); width: min(40vw, 360px); display: none; }
+  #boss.on { display: block; }
+  #boss .frame { --fc: var(--hot); --k: 10px; display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 12px; }
+  #boss b { font: 400 16px/1 'Russo One', sans-serif; letter-spacing: .1em; color: #ffd0dc; }
+  #boss .seg { height: 12px; }
+  #boss-fill { width: 100%; background: linear-gradient(90deg, #a01838, var(--hot) 60%, #ff9ab0); box-shadow: 0 0 8px var(--hot); }
   #msg { position: absolute; top: 33%; left: 0; right: 0; text-align: center; font: 400 clamp(34px, 8vw, 76px)/1 'Russo One', sans-serif; color: #fff; letter-spacing: .06em;
     text-shadow: 3px 0 var(--hot), -3px 0 var(--cyan), 0 0 24px rgba(255,138,60,.7); opacity: 0; }
   #msg.on { opacity: 1; }
@@ -288,6 +302,8 @@
   </div>
   <div id="combo"><b id="combo-n">X2 COMBO</b><div class="seg"><div id="combo-fill"></div></div></div>
   <div id="msg"></div>
+  <div id="go">GO<i></i></div>
+  <div id="boss" class="glow-h"><div class="frame"><b>ONI</b><div class="seg"><div id="boss-fill"></div></div></div></div>
   <div id="fps"></div>
 </div>
 
@@ -299,7 +315,7 @@
   <div class="hexwrap o"><button id="btn-upper" class="hex" aria-label="Smash">UP</button><button id="btn-attack" class="hex" aria-label="Frapper">PAF</button></div>
 </div>
 <div id="topright" class="glow-c">
-  <div id="stage" class="frame"><span>STAGE 01 / KO</span><span id="ko-count">00</span></div>
+  <div id="stage" class="frame"><span>STAGE <span id="stage-n">01</span> / KO</span><span id="ko-count">00</span></div>
   <button id="btn-pause" class="tbtn frame" aria-label="Pause">❚❚<small>PAUSE</small></button>
   <button id="btn-gui" class="tbtn frame" aria-label="Réglages">⚙<small>SETTINGS</small></button>
 </div>
@@ -375,6 +391,10 @@
     <div class="moves"><h3>Techniques</h3><dl>
       <dt>Combo</dt><dd>frapper ×3 : jab, cross, crochet qui projette</dd>
       <dt>Attaque ennemie</dt><dd>un ennemi qui rougit va frapper : jab et cross ne l'arrêtent plus, il faut un coup lourd, une saisie ou esquiver</dd>
+      <dt>Stage</dt><dd>4 zones : la caméra se bloque jusqu'à la fin des vagues, puis GO ouvre la suivante ; le boss ONI attend dans la dernière</dd>
+      <dt>Ennemis</dt><dd>voyou ; fonceur (charge en ligne : roulade ou saut, puis il est sonné) ; costaud à la barre (insensible aux coups légers, impossible à saisir) ; lanceuse de bouteilles (change de couloir)</dd>
+      <dt>Boss</dt><dd>combo de 3 coups, charge, saut avec onde de choc au sol (sauter au passage de l'anneau) ; sonné après chaque attaque, c'est le moment de frapper ou de le saisir ; le smash le met à terre</dd>
+      <dt>Nourriture</dt><dd>certaines caisses cachent un bol de ramen : +30 PV</dd>
       <dt>Mise à terre</dt><dd>trois coups encaissés en peu de temps et John tombe (il lâche son arme), invincible une seconde au relevé</dd>
       <dt>Charged Punch</dt><dd>maintenir frapper, relâcher : plus c'est chargé, plus ça projette ; onde de choc à distance au-delà de 60 %</dd>
       <dt>Jauge spéciale</dt><dd>se remplit en frappant et en encaissant ; pleine, elle débloque le smash</dd>

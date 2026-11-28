@@ -37,12 +37,15 @@ export function resolveHit(game, A, enemy, point, k = 1) {
   const heavy = A.heavy || ko;
 
   // ennemi en pleine attaque : un coup léger le blesse sans l'interrompre (il faut un coup lourd, une arme, une saisie)
-  if (!heavy && !A.weapon && enemy.armored()) {
-    time.hitstop(CFG.hitstopLight * 0.6);
-    juice.shake(CFG.shakeLight * 0.5);
+  if (!ko && enemy.resists(A, heavy)) {
+    time.hitstop(heavy ? CFG.hitstopHeavy * 0.6 : CFG.hitstopLight * 0.6);
+    juice.shake(heavy ? CFG.shakeHeavy * 0.5 : CFG.shakeLight * 0.5);
+    juice.flash(enemy.rig);
+    if (heavy) hero.gainSpecial(CFG.specialHeavy);
     juice.sparks(point, dir, 6 * CFG.particles, 0, [1, 0.35, 0.24]);
-    sfx.punch(false);
+    if (A.weapon) sfx[A.sfx](); else sfx.punch(heavy);
     game.ui.combo();
+    if (ko) game.onKO(enemy);
     return;
   }
 
@@ -72,6 +75,10 @@ function resolveCharged(game, enemy, point, dir, k) {
   enemy.hp -= (CHARGED.dmg + 30 * k) * CFG.damageMult;
   game.hero.gainSpecial(CFG.specialHeavy * (1 + k));
   const ko = enemy.hp <= 0;
+  if (!ko && enemy.resists(CHARGED, true)) { // boss : encaisse sans tomber
+    time.hitstop(CFG.hitstopHeavy); juice.shake(CFG.shakeHeavy); juice.flash(enemy.rig); juice.energyBurst(point, 0.6 + k); sfx.charged(k); game.ui.combo();
+    return;
+  }
   time.hitstop(CFG.hitstopHeavy + 0.1 * k);
   if (k > 0.95) time.slowmo(0.35);
   juice.shake(CFG.shakeHeavy * (1.1 + 0.6 * k));

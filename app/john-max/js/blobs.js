@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // Ombres « blob » : un disque sombre sous chaque perso et chaque objet, en un seul InstancedMesh.
 // Remplace la shadow map (pas de 2e passe de rendu, pas d'échantillonnage d'ombre dans les shaders).
-const MAX = 24;
+const MAX = 40;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
 const _p = new THREE.Vector3(), _s = new THREE.Vector3();
 
@@ -32,11 +32,11 @@ export class Blobs {
   update(game) {
     let i = 0;
     for (const ch of [game.hero, ...game.enemies]) {
-      this.set(i++, ch.x, ch.z, 0.9, ch.y);
+      if (ch.active !== false) this.set(i++, ch.x, ch.z, 0.9 * (ch.hScale || 1), ch.y);
     }
     for (const p of game.level.props) {
       const t = p.body.translation();
-      this.set(i++, t.x, t.z, 0.75, Math.max(0, t.y - 0.3));
+      if (Math.abs(t.x - game.camX) < 9) this.set(i++, t.x, t.z, 0.75, Math.max(0, t.y - 0.3));
     }
     for (const w of game.weapons.items) {
       if (w.state !== 'ground' || !w.body) continue;
