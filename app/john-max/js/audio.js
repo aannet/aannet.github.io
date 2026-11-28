@@ -1,5 +1,10 @@
 // Sons synthétisés en WebAudio : rien à télécharger, tout se règle en direct.
-let ctx = null, master = null, noise = null, shaper = null;
+let ctx = null, master = null, noise = null, shaper = null, muted = false;
+
+export function setMuted(m) {
+  muted = m;
+  if (master) master.gain.value = m ? 0 : 0.8;
+}
 
 export function unlockAudio() {
   if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -7,7 +12,7 @@ export function unlockAudio() {
   if (!AC) return;
   ctx = new AC();
   master = ctx.createGain();
-  master.gain.value = 0.8;
+  master.gain.value = muted ? 0 : 0.8;
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -14;
   comp.ratio.value = 6;

@@ -9,7 +9,7 @@ import { Enemy } from './enemy.js';
 import { Weapons } from './weapons.js';
 import { Blobs } from './blobs.js';
 import { UI, buildGui, loadSavedCfg } from './ui.js';
-import { unlockAudio, sfx } from './audio.js';
+import { unlockAudio, sfx, setMuted } from './audio.js';
 import { loadLibrary } from './assets.js';
 
 const loadBar = document.getElementById('load-fill');
@@ -70,6 +70,7 @@ async function boot() {
 
   game.onKO = (enemy) => {
     enemy.ko = true;
+    enemy.die();
     game.ui.ko();
     const standing = game.enemies.filter((e) => e !== enemy && !e.ko);
     if (standing.length === 0) {
@@ -99,6 +100,7 @@ async function boot() {
   };
   const togglePause = () => {
     if (!loader.classList.contains('gone') || help.classList.contains('on') || gameOver) return;
+    if (optEl.classList.contains('on')) { optEl.classList.remove('on'); return; }
     setPause(!game.paused);
   };
   game.input.onPause = togglePause;
@@ -134,6 +136,28 @@ async function boot() {
     setPause(false);
   });
   document.getElementById('pause-help').addEventListener('click', () => openHelp(true));
+
+  // Options joueur (pause > OPTIONS), gardées dans le navigateur
+  const OPT_KEY = 'jmOptions';
+  const opts = { sound: 1, vibration: 1, quality: CFG.renderLines, fps: 0 };
+  try { Object.assign(opts, JSON.parse(localStorage.getItem(OPT_KEY) || '{}')); } catch (e) { /* stockage indisponible */ }
+  const optEl = document.getElementById('options');
+  const applyOpts = () => {
+    setMuted(!opts.sound);
+    CFG.vibration = !!opts.vibration;
+    if (CFG.renderLines !== opts.quality) { CFG.renderLines = opts.quality; applyRes(); }
+    document.body.classList.toggle('show-fps', !!opts.fps);
+    for (const c of optEl.querySelectorAll('.choice')) for (const b of c.children) b.classList.toggle('on', +b.dataset.v === +opts[c.dataset.opt]);
+    try { localStorage.setItem(OPT_KEY, JSON.stringify(opts)); } catch (e) { /* idem */ }
+  };
+  optEl.addEventListener('click', (e) => {
+    const b = e.target.closest('.choice button');
+    if (b) { opts[b.parentElement.dataset.opt] = +b.dataset.v; applyOpts(); }
+  });
+  document.getElementById('pause-options').addEventListener('click', () => optEl.classList.add('on'));
+  document.getElementById('opt-back').addEventListener('click', () => optEl.classList.remove('on'));
+  document.getElementById('opt-advanced').addEventListener('click', () => { optEl.classList.remove('on'); setPause(false); if (!guiOn) toggleGui(); });
+  applyOpts();
 
   // Caméra
   const camX = { v: game.hero.x };

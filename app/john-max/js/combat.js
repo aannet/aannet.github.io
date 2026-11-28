@@ -21,7 +21,8 @@ export const AIR_STRIKE = { name: 'air', clip: 'Punch_Cross', from: 0.1, speed: 
 export const CHARGED = { name: 'charged', clip: 'Punch_Cross', from: 0.1, speed: 1.5, active: [0.2, 0.38], cancel: 0.62, end: 0.82, tip: 'fistR', r: 0.42, dmg: 20, heavy: true, charged: true, lunge: 2.4 };
 
 // Smash : l'uppercut, réservé à la jauge pleine. Les effets de zone se déclenchent au début de la fenêtre active.
-export const SMASH = { ...UPPERCUT, name: 'smash', smash: true, speed: 1.05 };
+// L'onde part à smashAt (poing au contact), pas au début de la fenêtre : l'éclair tombe avec la frappe.
+export const SMASH = { ...UPPERCUT, name: 'smash', smash: true, speed: 0.9, active: [0.25, 0.36], smashAt: 0.25 };
 
 const _l = new THREE.Vector3();
 

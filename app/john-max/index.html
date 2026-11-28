@@ -77,7 +77,8 @@
     color: #bdf3ff; font: 18px/1 system-ui, sans-serif; cursor: pointer; }
   .tbtn small { font: 600 8px/1 'Oswald', sans-serif; letter-spacing: .12em; }
   .tbtn:active { filter: brightness(1.6); }
-  #fps { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); font: 10px var(--mono); color: var(--cyan); opacity: .4; }
+  #fps { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); font: 10px var(--mono); color: var(--cyan); opacity: .4; display: none; }
+  body.show-fps #fps { display: block; }
 
   /* combo : compteur + jauge qui se vide (fenêtre d'enchaînement) */
   #combo { position: absolute; right: calc(max(10px, env(safe-area-inset-right)) + 150px); bottom: calc(13% + 168px); width: 130px; opacity: 0; transition: opacity .15s; }
@@ -93,6 +94,10 @@
   @keyframes pop { from { scale: 1.5; filter: blur(2px); } to { scale: 1; filter: none; } }
   #flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 55%, #fff 0%, rgba(255,190,120,.85) 30%, rgba(255,110,30,.35) 60%, transparent 85%); mix-blend-mode: screen; }
   #flash.on { animation: flash .45s ease-out; }
+  /* éclair du smash : blanc bleuté, cyan, violet (le Charged Punch reste orange) */
+  #flash.smash { background: radial-gradient(circle at 50% 55%, #fff 0%, rgba(150,235,255,.85) 26%, rgba(150,90,255,.4) 58%, transparent 85%); }
+  #flash.smash.on { animation: flashBolt .4s ease-out; }
+  @keyframes flashBolt { 0% { opacity: 1; } 12% { opacity: .25; } 22% { opacity: .9; } 100% { opacity: 0; } }
   @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
 
   /* ---- Contrôles tactiles ---- */
@@ -149,7 +154,21 @@
   #pause.on { display: grid; }
   #pause h2 { margin: 0 0 6px; font: 400 clamp(38px, 8vw, 72px)/1 'Russo One', 'Impact', sans-serif; letter-spacing: .06em; color: #fff; text-shadow: 0 0 .3em rgba(255,110,30,.7), 3px 0 0 rgba(255,61,110,.6), -3px 0 0 rgba(63,224,255,.5); }
   #pause p { margin: -4px 0 6px; font: 600 15px/1 'Oswald', sans-serif; letter-spacing: .2em; color: #cbbfd6; text-align: center; }
-  #pause .plate { display: block; min-width: 240px; }
+  #pause .pwrap { min-width: 250px; }
+  #pause .plate { padding: 12px 24px; }
+  /* options : lignes réglables dans un cadre néon */
+  #options { position: fixed; inset: 0; z-index: 36; display: none; place-items: center; background: rgba(6,5,10,.85); }
+  #options.on { display: grid; }
+  #options .card { --k: 18px; --fc: var(--cyan); background: rgba(8,7,14,.94); width: min(92vw, 460px); max-height: 92vh; overflow-y: auto; padding: 16px 20px; display: grid; gap: 8px; }
+  #options h3 { margin: 0 0 4px; font: 400 24px/1 'Russo One', sans-serif; letter-spacing: .08em; color: #eafcff; text-shadow: 0 0 8px rgba(63,224,255,.7); }
+  #options .opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; font: 600 15px/1 'Oswald', sans-serif; letter-spacing: .1em; }
+  #options .choice { display: flex; gap: 4px; }
+  #options .choice button { min-width: 64px; height: 36px; padding: 0 10px; border: 1px solid rgba(63,224,255,.45); background: rgba(10,8,16,.6); color: #bdf3ff;
+    font: 600 13px/1 'Oswald', sans-serif; letter-spacing: .1em; cursor: pointer; clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px)); }
+  #options .choice button.on { background: rgba(63,224,255,.25); color: #fff; border-color: var(--cyan); text-shadow: 0 0 6px var(--cyan); }
+  #options .row2 { display: flex; gap: 8px; margin-top: 6px; }
+  #options .row2 .pwrap { flex: 1; }
+  #options .row2 .plate { padding: 10px; font-size: 15px; }
   .lil-gui.autoPlace { position: fixed !important; top: max(60px, env(safe-area-inset-top)) !important; right: max(10px, env(safe-area-inset-right)) !important; max-height: calc(100% - 70px); overflow-y: auto; z-index: 20; font-family: system-ui, sans-serif; letter-spacing: 0; --widget-height: 24px; }
 
   /* Chargement / écran titre : l'image sans texte, le titre composé en CSS par-dessus */
@@ -185,21 +204,28 @@
   #load-txt { font-size: 18px; max-width: min(46vw, 420px); overflow-wrap: anywhere; text-shadow: 2px 2px 0 #000; }
   #load-txt.err { font: 14px/1.4 system-ui, sans-serif; letter-spacing: 0; color: #ffb35c; }
   /* boutons de l'accueil : plaque de métal sombre texturée, contour néon (fond coloré + calque intérieur), bande de danger */
-  .plate { --c: #ff8a3c; position: relative; isolation: isolate; display: none; border: 0; cursor: pointer; touch-action: manipulation;
-    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); background: var(--c);
-    font: 400 24px/1 'Russo One', 'Impact', sans-serif; letter-spacing: .18em; color: #fff; text-shadow: 0 0 10px var(--c), 0 0 2px var(--c); }
-  .plate::before { content: ''; position: absolute; inset: 2px; z-index: -1; clip-path: inherit;
-    background:
-      linear-gradient(115deg, transparent 30%, rgba(255,255,255,.09) 42%, transparent 52%),
-      linear-gradient(180deg, color-mix(in srgb, var(--c) 22%, #15101c), #09070d 70%);
-    background-blend-mode: screen, normal; }
-  .plate::after { content: ''; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 9px; z-index: -1; opacity: .85;
-    background: repeating-linear-gradient(-45deg, var(--c) 0 4px, transparent 4px 8px); }
-  .plate:active { filter: brightness(1.4); transform: translateY(2px); }
+  /* Boutons d'écran (accueil, pause, options) : même famille que le HUD, coins coupés, centre translucide,
+     liseré néon plein + liseré intérieur fin. La lueur vient du .pwrap (le clip-path couperait un drop-shadow). */
+  .pwrap { display: block; filter: drop-shadow(0 0 6px rgba(255,138,60,.6)); }
+  .pwrap.c { filter: drop-shadow(0 0 6px rgba(63,224,255,.55)); }
+  .plate { --c: var(--neon); --k: 14px; position: relative; isolation: isolate; display: block; width: 100%; border: 0; cursor: pointer; touch-action: manipulation;
+    clip-path: polygon(0 0, calc(100% - var(--k)) 0, 100% var(--k), 100% 100%, var(--k) 100%, 0 calc(100% - var(--k)));
+    background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--c) 30%, transparent), transparent 75%), rgba(10,8,16,.6);
+    font: 400 22px/1 'Russo One', 'Impact', sans-serif; letter-spacing: .14em; color: #fff; text-shadow: 0 0 8px var(--c); }
+  .pwrap.c .plate { --c: var(--cyan); }
+  .plate::before, .plate::after { content: ''; position: absolute; z-index: -1; background: var(--c); pointer-events: none; }
+  .plate::before { inset: 0;
+    clip-path: polygon(evenodd, 0 0, calc(100% - var(--k)) 0, 100% var(--k), 100% 100%, var(--k) 100%, 0 calc(100% - var(--k)), 0 0,
+      2px 2px, calc(100% - var(--k) - .8px) 2px, calc(100% - 2px) calc(var(--k) + .8px), calc(100% - 2px) calc(100% - 2px), calc(var(--k) + .8px) calc(100% - 2px), 2px calc(100% - var(--k) - .8px), 2px 2px); }
+  .plate::after { inset: 5px; opacity: .45; --j: 11px;
+    clip-path: polygon(evenodd, 0 0, calc(100% - var(--j)) 0, 100% var(--j), 100% 100%, var(--j) 100%, 0 calc(100% - var(--j)), 0 0,
+      1px 1px, calc(100% - var(--j) - .4px) 1px, calc(100% - 1px) calc(var(--j) + .4px), calc(100% - 1px) calc(100% - 1px), calc(var(--j) + .4px) calc(100% - 1px), 1px calc(100% - var(--j) - .4px), 1px 1px); }
+  .plate:active { filter: brightness(1.6); transform: translateY(1px); }
   .plate:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
-  #play { min-width: 220px; min-height: 58px; padding: 12px 40px 12px 48px; animation: pulse 1.8s infinite; }
-  #help-btn { --c: #3fe0ff; min-height: 44px; margin-top: 6px; padding: 8px 26px 8px 34px; font-size: 15px; letter-spacing: .24em; }
-  #loader.ready .plate { display: block; }
+  #play { min-width: 230px; min-height: 58px; padding: 12px 40px; font-size: 26px; animation: pulse 1.8s infinite; }
+  #help-btn { min-height: 44px; margin-top: 6px; padding: 8px 30px; font-size: 16px; letter-spacing: .24em; }
+  #loader .pwrap { display: none; }
+  #loader.ready .pwrap { display: block; }
   #help { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
     background: rgba(5,3,10,.82); backdrop-filter: blur(3px); }
   #help.on { display: grid; }
@@ -277,8 +303,22 @@
 <div id="pause" role="dialog" aria-modal="true">
   <h2 id="pause-title">PAUSE</h2>
   <p id="pause-sub"></p>
-  <button id="pause-resume" class="plate" type="button">REPRENDRE</button>
-  <button id="pause-help" class="plate" type="button" style="--c:#3fe0ff">AIDE</button>
+  <span class="pwrap"><button id="pause-resume" class="plate" type="button">REPRENDRE</button></span>
+  <span class="pwrap c"><button id="pause-options" class="plate" type="button">OPTIONS</button></span>
+  <span class="pwrap c"><button id="pause-help" class="plate" type="button">AIDE</button></span>
+</div>
+<div id="options" role="dialog" aria-modal="true">
+  <div class="card frame glow-c">
+    <h3>OPTIONS</h3>
+    <div class="opt"><span>SON</span><div class="choice" data-opt="sound"><button data-v="1">OUI</button><button data-v="0">NON</button></div></div>
+    <div class="opt"><span>VIBRATIONS</span><div class="choice" data-opt="vibration"><button data-v="1">OUI</button><button data-v="0">NON</button></div></div>
+    <div class="opt"><span>QUALITÉ</span><div class="choice" data-opt="quality"><button data-v="360">BASSE</button><button data-v="540">NORMALE</button><button data-v="720">HAUTE</button></div></div>
+    <div class="opt"><span>AFFICHER FPS</span><div class="choice" data-opt="fps"><button data-v="1">OUI</button><button data-v="0">NON</button></div></div>
+    <div class="row2">
+      <span class="pwrap c"><button id="opt-advanced" class="plate" type="button">RÉGLAGES AVANCÉS</button></span>
+      <span class="pwrap"><button id="opt-back" class="plate" type="button">RETOUR</button></span>
+    </div>
+  </div>
 </div>
 
 <div id="loader">
@@ -290,8 +330,8 @@
     <div class="panel">
       <div id="load-bar"><div id="load-fill"></div></div>
       <div id="load-txt">Chargement…</div>
-      <button id="play" class="plate" type="button">JOUER</button>
-      <button id="help-btn" class="plate" type="button">AIDE</button>
+      <span class="pwrap"><button id="play" class="plate" type="button">JOUER</button></span>
+      <span class="pwrap c"><button id="help-btn" class="plate" type="button">AIDE</button></span>
     </div>
   </div>
 </div>
@@ -308,7 +348,7 @@
         <dt>SAUT</dt><dd>sauter</dd>
         <dt>ESQ</dt><dd>roulade</dd>
         <dt>❚❚</dt><dd>pause</dd>
-        <dt>⚙</dt><dd>réglages du game feel</dd>
+        <dt>⚙</dt><dd>réglages avancés du game feel (son, vibrations, qualité : pause › OPTIONS)</dd>
       </dl></section>
       <section><h3>Manette</h3><dl>
         <dt>Stick / croix</dt><dd>se déplacer</dd>
@@ -335,7 +375,7 @@
       <dt>Mise à terre</dt><dd>trois coups encaissés en peu de temps et John tombe (il lâche son arme), invincible une seconde au relevé</dd>
       <dt>Charged Punch</dt><dd>maintenir frapper, relâcher : plus c'est chargé, plus ça projette ; onde de choc à distance au-delà de 60 %</dd>
       <dt>Jauge spéciale</dt><dd>se remplit en frappant et en encaissant ; pleine, elle débloque le smash</dd>
-      <dt>Smash</dt><dd>uppercut dévastateur, invincible pendant l'élan : flash, vibration, casse tout le décor dans un rayon de 3 m et projette loin les ennemis proches</dd>
+      <dt>Smash</dt><dd>uppercut électrique (éclair cyan et violet à l'impact), invincible pendant l'élan : flash, vibration, casse tout le décor dans un rayon de 3 m et projette loin les ennemis proches</dd>
       <dt>Juggle</dt><dd>frapper un ennemi en l'air le relance</dd>
       <dt>Coup aérien</dt><dd>frapper pendant un saut, une fois par saut : fait tomber</dd>
       <dt>Saisie</dt><dd>pousser le stick un instant contre un ennemi sonné ou immobile : John l'attrape ; on peut avancer avec lui</dd>

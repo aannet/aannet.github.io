@@ -24,7 +24,9 @@
 - Roulade : direction du stick, invincible sur 75 % de la durée, annule la fin d'un coup ou la charge.
 - Jauge spéciale : se remplit à chaque coup donné (plus avec les coups forts, lancers, Charged Punch) et reçu. Pleine, elle débloque le smash sur UP ; avant, UP est éteint.
 - Smash : uppercut (crochet en lanceur) avec flash plein écran, ralenti, vibration du téléphone ou de la manette, onde de choc ; casse tout le décor cassable dans un rayon de 3 m et projette loin les ennemis proches (6 à 7 m, plus fort au contact).
-- Smash : invincible 0,6 s pendant l'élan, 40 dégâts ; il doit battre le Charged Punch.
+- Smash : invincible 0,6 s pendant l'élan, 40 dégâts ; il doit battre le Charged Punch. L'éclair (cyan/violet, distinct de l'orange du Charged Punch) part au contact du poing.
+- Ennemi tué : animation de mort `Death01` (recule, tombe à la renverse, reste étendu bras en croix), clignote puis disparaît. Un ennemi simplement mis au sol garde `Hit_Knockback` puis se relève.
+- Pause › OPTIONS : son, vibrations, qualité (360/540/720 lignes), compteur FPS ; gardés dans le navigateur.
 - Attaque ennemie télégraphiée : l'ennemi rougit pendant la préparation (bip d'annonce). Pendant son attaque, jab et cross le blessent sans l'interrompre ; il faut un coup lourd, une arme, une saisie, ou esquiver.
 - John peut tomber : trois coups encaissés en 4 s, ou plus de vie. Il lâche son arme, se relève invincible 1 s. À 0 PV : écran K.O. et CONTINUER.
 - Charged Punch : ne se déclenche plus qu'aux fenêtres d'annulation d'un coup ; appui 0,35 s ; onde de choc 1,8 m.

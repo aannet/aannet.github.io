@@ -80,9 +80,9 @@ export class Hero extends Character {
     game.time.slowmo(0.6);
     game.juice.shake(1);
     game.juice.camPunch(0.24);
-    game.juice.energyBurst(this.tip('fistR', _p), 2.6);
+    game.juice.electricBurst(this.tip('fistR', _p), 2.6);
     for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; game.juice.dust(this.x + Math.cos(a) * R * 0.6, this.z + Math.sin(a) * R * 0.35, 0.7); }
-    game.ui.flashScreen();
+    game.ui.flashScreen('smash');
     game.input.rumble(320, 1);
     sfx.smash();
     game.level.breakables.smashArea(this.x, this.z, R);
@@ -95,6 +95,7 @@ export class Hero extends Character {
       e.bowled.clear();
       e.knock(dir * CFG.smashKnock * near, CFG.upperUp * 1.25);
       game.juice.flash(e.rig);
+      game.juice.sparks(e.headPos(_p), dir, 8 * CFG.particles, 1.5, [0.5, 0.9, 1]);
       game.ui.combo();
       if (e.hp <= 0 && !e.ko) game.onKO(e);
     }
@@ -420,7 +421,7 @@ export class Hero extends Character {
       const ct = this.model.actions[this.A.clip].time;
       if (ct >= this.A.active[0] && ct <= this.A.active[1]) {
         if (this.A.charged && !this.waveDone) this.shockwave();
-        if (this.A.smash && !this.smashDone) this.smash();
+        if (this.A.smash && !this.smashDone && ct >= this.A.smashAt) this.smash();
         this.testHits(this.A);
       }
     }

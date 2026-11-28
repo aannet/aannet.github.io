@@ -15,6 +15,11 @@ const LOOKS = [
 // Attaque ennemie : cross ralenti pour être lisible. Temps en secondes de clip.
 const ATK = { clip: 'Punch_Cross', active: [0.22, 0.34], end: 0.8 };
 const WARN = new THREE.Color(1, 0.12, 0.08);
+// Chutes : mise au sol (on se relève) ou mort. hold = instant du clip tenu tant qu'il est en l'air.
+const FALL = {
+  knock: { clip: 'Hit_Knockback', from: 0, speed: 1.1, hold: 0.22 },
+  death: { clip: 'Death01', from: 0.62, speed: 1.25, hold: 0.95 },
+};
 
 export class Enemy extends Character {
   constructor(game, idx) {
@@ -102,18 +107,28 @@ export class Enemy extends Character {
 
   // Chute animée : Hit_Knockback (finit sur le dos) + trajectoire balistique du root.
   // Sa dernière pose correspond à la première de LayToIdle : le relevé s'enchaîne sans saut.
+  // KO : Death01 (recule, part à la renverse, reste étendu bras en croix) à la place du Hit_Knockback.
+  // La pose « en chute » est tenue en l'air (FALL.hold), la fin du clip se joue à l'atterrissage.
   knock(vx, vy, from = 0) {
     this.vx = vx;
     this.vy = vy;
     this.y = Math.max(this.y, 0.01);
     this.facing = vx ? -Math.sign(vx) : this.facing;
-    this.anim('Hit_Knockback', { fade: 0.04, restart: true, from, speed: 1.1 });
+    this.fall = this.ko ? FALL.death : FALL.knock;
+    this.anim(this.fall.clip, { fade: 0.04, restart: true, from: Math.max(from, this.fall.from), speed: this.fall.speed });
     this.setState('knock');
+  }
+
+  // Appelé au KO : si l'ennemi est déjà en train de tomber, la chute devient une mort
+  die() {
+    if (this.state !== 'knock' || this.fall === FALL.death) return;
+    this.fall = FALL.death;
+    this.anim(FALL.death.clip, { fade: 0.08, restart: true, from: FALL.death.from, speed: FALL.death.speed });
   }
 
   // Coup reçu en l'air : on le relance vers le haut
   juggle(vx, vy) {
-    this.knock(vx, Math.max(this.vy, 0) * 0.3 + vy, 0.05);
+    this.knock(vx, Math.max(this.vy, 0) * 0.3 + vy, this.ko ? FALL.death.from : 0.05);
   }
 
   respawn() {
@@ -217,7 +232,7 @@ export class Enemy extends Character {
         break;
       }
       case 'knock': {
-        const a = this.model.actions.Hit_Knockback;
+        const F = this.fall, a = this.model.actions[F.clip];
         const air = this.y > 0;
         this.x += this.vx * dt;
         if (Math.abs(this.vx) > 1.5) game.level.breakables.sweep(this);
@@ -225,11 +240,12 @@ export class Enemy extends Character {
           this.vy -= CFG.gravity * dt;
           this.y += this.vy * dt;
           this.vx *= Math.exp(-0.6 * dt);
-          a.timeScale = a.time > 0.22 ? 0 : 1.1; // reste cambré en l'air, finit la chute à l'atterrissage
+          a.timeScale = a.time > F.hold ? 0 : F.speed; // pose de chute tenue en l'air, la fin se joue à l'atterrissage
           if (this.y <= 0) {
             this.y = 0;
-            a.timeScale = 1.1;
-            if (this.vy < -2.5) { sfx.thud(-this.vy / 8); game.juice.dust(this.x, this.z, 1); game.juice.shake(Math.min(0.2, -this.vy * 0.02)); }
+            a.timeScale = F.speed;
+            if (this.ko && this.vy < -1.5) { sfx.thud(0.9); game.juice.dust(this.x, this.z, 1.4); game.juice.shake(0.25); this.vy = 0; }
+            else if (this.vy < -2.5) { sfx.thud(-this.vy / 8); game.juice.dust(this.x, this.z, 1); game.juice.shake(Math.min(0.2, -this.vy * 0.02)); }
             this.vy = 0;
           }
         } else {
@@ -241,7 +257,10 @@ export class Enemy extends Character {
       case 'down': {
         this.x += this.vx * dt;
         this.vx *= Math.exp(-CFG.groundDrag * dt);
-        if (this.ko) { if (this.t > 2.5) this.respawn(); }
+        if (this.ko) {
+          this.model.root.visible = this.t < 1.6 || Math.floor(this.t * 14) % 2 === 0; // clignote puis disparaît
+          if (this.t > 2.5) { this.model.root.visible = true; this.respawn(); }
+        }
         else if (this.t > 0.35) { this.anim('LayToIdle', { fade: 0.05, restart: true, speed: 1.2 }); this.setState('getup'); }
         break;
       }

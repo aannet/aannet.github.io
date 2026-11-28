@@ -120,6 +120,9 @@ export class Juice {
     scene.add(this.chargeGlow);
     this.chargeZoom = 0;
     this.energyRings = new SpritePool(scene, ring, 0xff6a10, 4);
+    // smash : énergie électrique cyan / violet, pour ne pas se confondre avec l'orange du Charged Punch
+    this.boltRings = new SpritePool(scene, ring, 0x4fd8ff, 4);
+    this.boltRays = new SpritePool(scene, rays, 0xb58cff, 3);
   }
 
   // Appelé à chaque tick pendant la charge (p = poing), p null pour arrêter
@@ -155,6 +158,16 @@ export class Juice {
     this.rays.spawn(p, 0.14, 0.8, 2.6 * s, 1);
     this.sparks(p, Math.random() < 0.5 ? 1 : -1, 14 * CFG.particles, 2);
     this.sparks(p, Math.random() < 0.5 ? 1 : -1, 14 * CFG.particles, 2);
+  }
+
+  electricBurst(p, s) {
+    this.boltRings.spawn(p, 0.3, 0.3, 2.6 * s, 1, 0);
+    this.boltRings.spawn(p, 0.45, 0.2, 3.8 * s, 0.7, 0);
+    this.boltRays.spawn(p, 0.18, 0.9, 3 * s, 1);
+    this.boltRays.spawn(p, 0.12, 0.6, 2 * s, 0.8);
+    const q = CFG.particles;
+    this.sparks(p, 1, 16 * q, 2.5, [0.45, 0.9, 1]);
+    this.sparks(p, -1, 16 * q, 2.5, [0.75, 0.55, 1]);
   }
 
   shake(amount) {
@@ -259,6 +272,8 @@ export class Juice {
     this.rings.update(dt);
     this.dusts.update(dt);
     this.energyRings.update(dt);
+    this.boltRings.update(dt);
+    this.boltRays.update(dt);
   }
 
   // Décalage de caméra (shake = trauma², bruit pseudo-aléatoire lisse)

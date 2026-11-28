@@ -58,8 +58,8 @@ export class UI {
     this.status.classList.add('denied');
   }
 
-  flashScreen() {
-    this.flashEl.classList.remove('on');
+  flashScreen(kind = '') {
+    this.flashEl.className = kind;
     void this.flashEl.offsetWidth;
     this.flashEl.classList.add('on');
   }
