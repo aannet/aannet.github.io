@@ -72,6 +72,18 @@ function resolveCharged(game, enemy, point, dir, k) {
   if (ko) game.onKO(enemy);
 }
 
+// Projection d'un ennemi saisi : dégâts immédiats, puis chute animée (renverse ceux qu'il percute)
+export function resolveThrow(game, enemy, dir) {
+  enemy.hp -= CFG.throwDmg * CFG.damageMult;
+  enemy.bowled.clear();
+  enemy.knock(dir * CFG.throwV, CFG.throwUp);
+  enemy.facing = -dir;
+  game.juice.shake(CFG.shakeHeavy * 0.7);
+  sfx.whoosh(true);
+  game.ui.combo();
+  if (enemy.hp <= 0) game.onKO(enemy);
+}
+
 // Coup sur un ennemi en l'air (chute animée) : on le relance (juggle).
 export function resolveJuggle(game, A, enemy, point) {
   const { juice, time, hero } = game;

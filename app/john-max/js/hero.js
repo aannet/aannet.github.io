@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { Character } from './character.js';
-import { FIST_COMBO, BAT_COMBO, UPPERCUT, CHARGED, AIR_STRIKE, resolveHit, resolveJuggle } from './combat.js';
+import { FIST_COMBO, BAT_COMBO, UPPERCUT, CHARGED, AIR_STRIKE, resolveHit, resolveJuggle, resolveThrow } from './combat.js';
 import { sfx } from './audio.js';
 
 const _p = new THREE.Vector3();
 const JOG_SPEED = 3.0; // vitesse naturelle du clip Jog_Fwd_Loop (m/s), pour caler les pieds
 const ROLL_UP = 1.2; // instant du clip Roll où John est de nouveau debout
+const THROW_RELEASE = 0.36; // instant du clip OverhandThrow où la main lâche
 
 // John Max : débardeur et cargo noirs, bottes acier, bandages, tatouage Oni sur le bras droit.
 const LOOK = {
@@ -28,6 +29,8 @@ export class Hero extends Character {
     this.chargeT = 0;
     this.chargeK = 0;
     this.dodgeDir = new THREE.Vector2(1, 0);
+    this.held = null; // ennemi saisi
+    this.grabT = 0;
   }
 
   combo() {
@@ -92,8 +95,49 @@ export class Hero extends Character {
     this.setState('air');
   }
 
+  // Saisie : John tient l'ennemi au col, bras tendus (pose de portage)
+  startGrab(e) {
+    this.held = e;
+    this.facing = Math.sign(e.x - this.x) || this.facing;
+    e.grabbed();
+    this.anim('Walk_Carry_Loop', { fade: 0.1, restart: true, speed: 0 });
+    sfx.punch(false);
+    this.setState('grab');
+  }
+
+  release() {
+    if (!this.held) return;
+    this.held.released(this.facing);
+    this.held = null;
+  }
+
+  // Lancer par-dessus l'épaule, devant (dir = facing) ou derrière (dir = -facing)
+  startThrow(dir) {
+    this.throwDir = dir;
+    this.anim('OverhandThrow', { fade: 0.06, restart: true, speed: 1.3 });
+    this.setState('throw');
+  }
+
+  // L'ennemi saisi suit les mains de John
+  holdPosition() {
+    const e = this.held;
+    if (this.state === 'throw') {
+      // pendant l'élan, il suit la main droite : recule, monte au-dessus de l'épaule
+      this.tip('fistR', _p);
+      e.x = _p.x + this.facing * 0.1;
+      e.y = Math.max(0, _p.y - 1.3);
+      e.z = _p.z;
+    } else {
+      e.x = this.x + this.facing * 0.62;
+      e.y = 0;
+      e.z = this.z;
+    }
+    e.facing = -this.facing;
+  }
+
   hurt(dir) {
     if (this.invuln > 0 || this.state === 'hurt') return false;
+    if (this.held) this.release();
     if (this.state === 'charge') this.stopCharge();
     const { juice } = this.game;
     juice.flash(this.rig);
@@ -135,7 +179,11 @@ export class Hero extends Character {
       } else {
         this.anim(this.bat ? 'Sword_Idle' : 'Guard', { fade: 0.2, speed: this.bat ? 1 : 0, loop: true });
       }
-      if (input.take('jump', CFG.inputBuffer)) this.startJump();
+      // saisie : pousser le stick contre un ennemi debout
+      const grabTarget = this.grabCandidate(mx);
+      this.grabT = grabTarget ? this.grabT + dt : 0;
+      if (grabTarget && this.grabT > 0.1) { this.grabT = 0; this.startGrab(grabTarget); }
+      else if (input.take('jump', CFG.inputBuffer)) this.startJump();
       else if (input.take('dodge', CFG.inputBuffer)) this.startDodge();
       else if (input.take('upper', CFG.inputBuffer)) this.startAttack(0, UPPERCUT);
       else if (input.take('attack', CFG.inputBuffer)) this.startAttack(0);
@@ -177,6 +225,33 @@ export class Hero extends Character {
 
     if (this.state === 'land' && this.t >= 0.12) this.setState('free');
 
+    if (this.state === 'grab') {
+      const sp = CFG.heroSpeed * 0.5;
+      const dx = input.move.x * sp * dt, dz = input.move.z * sp * 0.7 * dt;
+      // on avance avec lui ; on ne se retourne pas (la direction se choisit au lancer)
+      this.x += dx; this.z += dz;
+      const v = Math.hypot(dx, dz) / dt;
+      this.anim('Walk_Carry_Loop', { speed: v > 0.2 ? v / (1.4 * CFG.animSpeed) : 0 });
+      if (input.take('attack', CFG.inputBuffer)) {
+        const back = input.move.x * this.facing < -0.5; // stick vers l'arrière : lancer derrière
+        this.startThrow(back ? -this.facing : this.facing);
+      } else if (input.take('upper', CFG.inputBuffer)) this.startThrow(-this.facing);
+      else if (input.take('jump', CFG.inputBuffer)) { this.release(); this.startJump(); }
+      else if (input.take('dodge', CFG.inputBuffer)) { this.release(); this.startDodge(); }
+      else if (this.t > CFG.grabTime) this.release(), this.setState('free');
+    }
+
+    if (this.state === 'throw') {
+      const act = this.model.actions.OverhandThrow;
+      if (this.held && act.time >= THROW_RELEASE) {
+        if (this.throwDir !== this.facing) this.facing = this.throwDir; // lancer derrière : John se retourne
+        const e = this.held;
+        this.held = null;
+        resolveThrow(this.game, e, this.throwDir);
+      }
+      if (act.time >= 0.9) this.setState('free');
+    }
+
     // retombée si un coup le surprend en l'air
     if (this.state !== 'air' && this.y > 0) {
       this.vy -= CFG.gravity * dt;
@@ -207,6 +282,7 @@ export class Hero extends Character {
 
     this.clampArena();
     this.step(dt, lean);
+    if (this.held) this.holdPosition();
 
     // hitbox active seulement sur la fenêtre utile du clip (au sol ou coup aérien)
     if ((this.state === 'attack' && this.phase === 'main') || (this.state === 'air' && this.A)) {
@@ -240,6 +316,17 @@ export class Hero extends Character {
     } else if (!act.isRunning() || ct >= act.getClip().duration - 1e-3) {
       this.setState('free');
     }
+  }
+
+  // Ennemi debout, juste devant, vers qui on pousse le stick
+  grabCandidate(mx) {
+    if (this.bat || Math.abs(mx) < 0.5) return null;
+    for (const e of this.game.enemies) {
+      if (!e.hittable() || e.state === 'attack') continue;
+      const dx = e.x - this.x;
+      if (Math.sign(dx) === Math.sign(mx) && Math.abs(dx) < 0.78 && Math.abs(e.z - this.z) < 0.3) return e;
+    }
+    return null;
   }
 
   // Onde de choc du Charged Punch : touche aussi les ennemis devant, à distance (si assez chargé)

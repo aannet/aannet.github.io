@@ -52,6 +52,12 @@ export const CFG = {
   jumpV: 6.2,
   airControl: 0.8,
 
+  // Saisie et projection
+  grabTime: 2.5,
+  throwV: 7,
+  throwUp: 4,
+  throwDmg: 18,
+
   // Esquive (roulade)
   dodgeDist: 2.8,
   dodgeInvuln: 0.75,

@@ -47,6 +47,20 @@ export class Enemy extends Character {
     return this.active && ['approach', 'attack', 'hitstun'].includes(this.state);
   }
 
+  // Saisi par le héros : figé en réaction, placé chaque tick par le héros
+  grabbed() {
+    this.releaseToken();
+    this.kx = 0;
+    this.anim('Hit_Chest', { fade: 0.06, restart: true, from: 0.12, speed: 0 });
+    this.setState('grabbed');
+  }
+
+  // Lâché sans être projeté (le héros a pris un coup, sauté, roulé, ou la prise a expiré)
+  released(dir) {
+    this.y = 0;
+    this.lightHit(dir);
+  }
+
   // En l'air après un coup fort (chute animée) : on peut le rattraper (juggle)
   airborne() {
     return this.state === 'knock' && this.y > 0.12;
@@ -174,6 +188,10 @@ export class Enemy extends Character {
         }
         break;
       }
+      case 'grabbed':
+        this.step(dt);
+        this.updateBar();
+        return;
       case 'hitstun': {
         if (this.t >= this.stunDur) { this.cooldown = Math.max(this.cooldown, 0.4); this.setState('approach'); }
         break;

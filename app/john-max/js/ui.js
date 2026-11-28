@@ -110,6 +110,8 @@ export function buildGui(GUI, game) {
   ch.add(CFG, 'chargeWave', 0, 5, 0.1).name('portée onde de choc (m)');
   ch.add(CFG, 'jumpV', 3, 10, 0.1).name('impulsion saut');
   ch.add(CFG, 'airControl', 0, 1.2, 0.05).name('contrôle en l\'air');
+  ch.add(CFG, 'throwV', 2, 14, 0.5).name('force du lancer');
+  ch.add(CFG, 'grabTime', 0.5, 6, 0.1).name('durée de la prise (s)');
   ch.add(CFG, 'dodgeDist', 1, 5, 0.1).name('distance roulade (m)');
   ch.add(CFG, 'dodgeInvuln', 0, 1, 0.05).name('part invincible');
 

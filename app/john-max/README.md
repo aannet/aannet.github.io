@@ -19,6 +19,7 @@
 - Combo : jab, cross, crochet (le 3e coup projette l'ennemi). Avec la batte : 2 swings lourds.
 - Charged Punch : PAF maintenu. John se fige épaule en arrière, l'énergie orange monte au poing (halo, étincelles aspirées, zoom), puis le cross part au relâchement. Dégâts, projection et onde de choc à distance selon la charge ; ralenti à pleine charge.
 - Saut : contrôle réduit en l'air, un coup aérien par saut (fait tomber, rattrape les ennemis en l'air).
+- Saisie : pousser le stick contre un ennemi debout ; John le tient au col et peut avancer avec lui. Frapper le lance devant, UP (ou frapper + stick arrière) le lance derrière, par-dessus l'épaule (`OverhandThrow`). Il se libère après 2,5 s ; un coup reçu, un saut ou une roulade le relâchent.
 - Roulade : direction du stick, invincible sur 75 % de la durée, annule la fin d'un coup ou la charge.
 - Uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
 - La batte est au fond à gauche : marcher dessus pour la prendre. Elle casse au bout de N coups, une autre tombe 5 s plus tard.
