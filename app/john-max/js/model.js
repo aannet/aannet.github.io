@@ -1,6 +1,51 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toonGradient } from './toon.js';
+
+// Poivre et sel : chaque sommet prend un gris tiré au hasard (majorité sombre, quelques mèches claires)
+// valeurs sRGB converties en linéaire (les couleurs de sommet sont lues en linéaire par le shader)
+const GREYS = [0.09, 0.14, 0.24, 0.42, 0.68].map((k) => new THREE.Color().setRGB(k, k, k * 1.03, THREE.SRGBColorSpace).toArray());
+const WEIGHTS = [0.3, 0.24, 0.2, 0.16, 0.1];
+function grey() {
+  let r = Math.random();
+  for (let i = 0; i < GREYS.length; i++) { if ((r -= WEIGHTS[i]) <= 0) return GREYS[i]; }
+  return GREYS[0];
+}
+function saltPepper(geo) {
+  const n = geo.attributes.position.count, c = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) c.set(grey(), i * 3);
+  geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+}
+
+// Mèches dressées : cônes posés sur les sommets du dessus du crâne (espace monde, pose de repos),
+// orientés selon la normale, vers le haut et un peu vers l'arrière. Fusionnés en un seul maillage.
+function spikes(src, world, { count = 42, len = 0.11 }, colored) {
+  const pos = src.attributes.position, nor = src.attributes.normal;
+  const nm = new THREE.Matrix3().getNormalMatrix(world);
+  const pts = [];
+  let top = -Infinity;
+  const v = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) top = Math.max(top, v.fromBufferAttribute(pos, i).applyMatrix4(world).y);
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(world);
+    n.fromBufferAttribute(nor, i).applyMatrix3(nm).normalize();
+    if (n.y > 0.2 && v.y > top - 0.11 && n.z < 0.75) pts.push([v.clone(), n.clone()]);
+  }
+  const geos = [], up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), q = new THREE.Quaternion(), m = new THREE.Matrix4();
+  for (let k = 0; k < count && pts.length; k++) {
+    const [p, nn] = pts[Math.floor(Math.random() * pts.length)];
+    const L = len * (0.7 + Math.random() * 0.6);
+    const cone = new THREE.ConeGeometry(0.02 + Math.random() * 0.012, L, 5).translate(0, L / 2, 0);
+    dir.copy(nn).multiplyScalar(0.9).add(up.clone().multiplyScalar(0.55)).add(new THREE.Vector3((Math.random() - 0.5) * 0.25, 0, -0.55)).normalize();
+    q.setFromUnitVectors(up, dir);
+    m.compose(p.clone().addScaledVector(dir, -0.012), q, new THREE.Vector3(1, 1, 1));
+    cone.applyMatrix4(m);
+    if (colored) saltPepper(cone);
+    geos.push(cone);
+  }
+  return mergeGeometries(geos);
+}
 
 // Personnage riggé (Quaternius, squelette 65 os) : toon + contour + liseré, habillé par teinte par sommet.
 // L'habit est calculé une fois au chargement selon l'os dominant de chaque sommet :
@@ -102,22 +147,30 @@ export class Model {
     this.bones = {};
     for (const b of body.skeleton.bones) this.bones[b.name] = b;
 
-    // Coiffures : maillages statiques « origine au corps », rattachés à l'os de la tête
+    // Coiffures : maillages statiques « origine au corps », rattachés à l'os de la tête.
+    // look.saltPepper : gris aléatoires par sommet (poivre et sel) ; look.spikes : mèches dressées générées
+    // sur le dessus du crâne de la coupe rasée.
     this.root.updateWorldMatrix(true, true);
     const head = this.bones.Head;
     const inv = new THREE.Matrix4().copy(head.matrixWorld).invert();
-    const hairMat = new THREE.MeshToonMaterial({ color: look.hairColor ?? 0x1b1512, gradientMap: g });
+    const hairMat = new THREE.MeshToonMaterial({ color: look.saltPepper ? 0xffffff : look.hairColor ?? 0x1b1512, gradientMap: g, vertexColors: !!look.saltPepper });
     this.mats.push(hairMat);
+    const attach = (geo, world) => {
+      const m = new THREE.Mesh(geo, hairMat);
+      m.matrixAutoUpdate = false;
+      m.matrix.multiplyMatrices(inv, world);
+      m.frustumCulled = false;
+      head.add(m);
+    };
     for (const h of look.hair || []) {
       const scene = lib['hair_' + h].scene.clone();
       scene.updateWorldMatrix(true, true);
       scene.traverse((o) => {
         if (!o.isMesh) return;
-        const m = new THREE.Mesh(o.geometry, hairMat);
-        m.matrixAutoUpdate = false;
-        m.matrix.multiplyMatrices(inv, o.matrixWorld);
-        m.frustumCulled = false;
-        head.add(m);
+        let geo = o.geometry;
+        if (look.saltPepper) { geo = geo.clone(); saltPepper(geo); }
+        attach(geo, o.matrixWorld);
+        if (look.spikes && h === 'buzzed') attach(spikes(o.geometry, o.matrixWorld, look.spikes, !!look.saltPepper), new THREE.Matrix4());
       });
     }
 

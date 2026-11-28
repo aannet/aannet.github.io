@@ -30,8 +30,8 @@ export class Enemy extends Character {
 
   makeBar() {
     const g = new THREE.Group();
-    const bg = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.09), new THREE.MeshBasicMaterial({ color: 0x1a1020, depthTest: false }));
-    const fillGeo = new THREE.PlaneGeometry(0.56, 0.05);
+    const bg = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.06), new THREE.MeshBasicMaterial({ color: 0x08070e, transparent: true, opacity: 0.75, depthTest: false }));
+    const fillGeo = new THREE.PlaneGeometry(0.56, 0.03);
     fillGeo.translate(0.28, 0, 0);
     this.barMat = new THREE.MeshBasicMaterial({ color: 0x5be36b, depthTest: false });
     const fill = new THREE.Mesh(fillGeo, this.barMat);
@@ -248,6 +248,6 @@ export class Enemy extends Character {
     this.bar.quaternion.copy(this.game.camera.quaternion);
     const k = Math.max(0, this.hp / this.maxHp);
     this.barFill.scale.x = Math.max(0.001, k);
-    this.barMat.color.setHex(k > 0.5 ? 0x5be36b : k > 0.25 ? 0xf2c14e : 0xe8484a);
+    this.barMat.color.setHex(k > 0.5 ? 0x3fe0ff : k > 0.25 ? 0xff8a3c : 0xff3d6e);
   }
 }

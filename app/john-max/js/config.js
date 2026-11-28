@@ -36,6 +36,13 @@ export const CFG = {
   // Chutes
   bowling: true,
 
+  // Jauge de spécial (débloque le smash, sur le bouton UP)
+  specialHit: 6,
+  specialHeavy: 10,
+  specialHurt: 10,
+  smashRadius: 3,
+  vibration: true,
+
   // Uppercut & juggle
   upperUp: 5.8,
   upperX: 0.5,

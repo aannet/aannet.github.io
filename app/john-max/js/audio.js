@@ -158,6 +158,31 @@ export const sfx = {
     noiseBurst(t, 0.1, 500 * rnd(0.3), 3, 0.5 * k);
     thump(t, 90, 50, 0.1, 0.4 * k);
   },
+  ready() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [523, 784, 1046].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), s = t + i * 0.07;
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.13, s); g.gain.exponentialRampToValueAtTime(0.001, s + 0.25);
+      o.connect(g).connect(master); o.start(s); o.stop(s + 0.27);
+    });
+  },
+  denied() {
+    if (!ctx) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square'; o.frequency.setValueAtTime(140, t); o.frequency.setValueAtTime(100, t + 0.06);
+    g.gain.setValueAtTime(0.07, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    o.connect(g).connect(master); o.start(t); o.stop(t + 0.15);
+  },
+  smash() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.charged(1);
+    thump(t, 70, 18, 1.1, 1, shaper);
+    noiseBurst(t, 0.9, 260, 0.5, 1, 'lowpass', shaper);
+    noiseBurst(t + 0.03, 0.25, 3000, 0.8, 0.6, 'highpass');
+  },
   wood() {
     if (!ctx) return;
     const t = ctx.currentTime;

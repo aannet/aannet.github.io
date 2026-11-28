@@ -5,6 +5,10 @@ export class UI {
   constructor(game) {
     this.game = game;
     this.hpFill = document.getElementById('hp-fill');
+    this.spFill = document.getElementById('sp-fill');
+    this.status = document.getElementById('status');
+    this.upBtn = document.getElementById('btn-upper');
+    this.flashEl = document.getElementById('flash');
     this.comboEl = document.getElementById('combo');
     this.msgEl = document.getElementById('msg');
     this.fpsEl = document.getElementById('fps');
@@ -30,7 +34,7 @@ export class UI {
 
   ko() {
     this.kos++;
-    this.koEl.textContent = `KO ${this.kos}`;
+    this.koEl.textContent = `KO ${String(this.kos).padStart(2, '0')}`;
   }
 
   message(text, dur = 1) {
@@ -41,9 +45,25 @@ export class UI {
     this.msgT = dur;
   }
 
+  specialDenied() {
+    this.status.classList.remove('denied');
+    void this.status.offsetWidth;
+    this.status.classList.add('denied');
+  }
+
+  flashScreen() {
+    this.flashEl.classList.remove('on');
+    void this.flashEl.offsetWidth;
+    this.flashEl.classList.add('on');
+  }
+
   update(dt) {
     const h = this.game.hero;
     this.hpFill.style.width = `${Math.max(0, (h.hp / h.maxHp) * 100)}%`;
+    this.spFill.style.width = `${h.special}%`;
+    const ready = h.special >= 100;
+    this.status.classList.toggle('ready', ready);
+    this.upBtn.classList.toggle('ready', ready);
     this.comboT -= dt;
     if (this.comboT <= 0) this.comboEl.classList.remove('on');
     this.msgT -= dt;
@@ -102,6 +122,14 @@ export function buildGui(GUI, game) {
   u.add(CFG, 'upperX', 0, 6, 0.1).name('uppercut horizontal');
   u.add(CFG, 'juggleUp', 0, 10, 0.1).name('relance en l\'air');
   u.add(CFG, 'juggleX', 0, 6, 0.1).name('poussée en l\'air');
+
+  const sp = f('Jauge spéciale & smash');
+  sp.add(CFG, 'specialHit', 0, 30, 1).name('gain par coup');
+  sp.add(CFG, 'specialHeavy', 0, 40, 1).name('gain coup fort');
+  sp.add(CFG, 'specialHurt', 0, 40, 1).name('gain coup reçu');
+  sp.add(CFG, 'smashRadius', 1, 6, 0.1).name('rayon du smash (m)');
+  sp.add(CFG, 'vibration').name('vibrations');
+  sp.add({ go: () => { game.hero.special = 100; } }, 'go').name('remplir la jauge');
 
   const ch = f('Charged Punch, saut, esquive');
   ch.add(CFG, 'chargeDelay', 0.1, 0.6, 0.01).name('appui avant charge (s)');

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { Character } from './character.js';
-import { FIST_COMBO, BAT_COMBO, UPPERCUT, CHARGED, AIR_STRIKE, resolveHit, resolveJuggle, resolveThrow } from './combat.js';
+import { FIST_COMBO, BAT_COMBO, SMASH, CHARGED, AIR_STRIKE, resolveHit, resolveJuggle, resolveThrow } from './combat.js';
 import { sfx } from './audio.js';
 
 const _p = new THREE.Vector3();
@@ -11,7 +11,7 @@ const THROW_RELEASE = 0.36; // instant du clip OverhandThrow où la main lâche
 
 // John Max : débardeur et cargo noirs, bottes acier, bandages, tatouage Oni sur le bras droit.
 const LOOK = {
-  body: 'male', hair: ['buzzed', 'beard'], hairColor: 0x1b1512,
+  body: 'male', hair: ['buzzed', 'beard'], saltPepper: true, spikes: { count: 60, len: 0.075 },
   shirt: 0x17171b, pants: 0x222227, boots: 0x2a2c33, hands: 0x121212, tattoo: true, rim: 0xff8a3c,
 };
 
@@ -30,6 +30,7 @@ export class Hero extends Character {
     this.chargeK = 0;
     this.dodgeDir = new THREE.Vector2(1, 0);
     this.held = null; // ennemi saisi
+    this.special = 0; // jauge 0..100 : pleine, elle débloque le smash
     this.grabT = 0;
   }
 
@@ -50,6 +51,48 @@ export class Hero extends Character {
     this.anim(this.A.clip, { fade: 0.06, speed: this.A.speed, restart: true, from: this.A.from || 0 });
     this.waveDone = false;
     this.setState('attack');
+  }
+
+  gainSpecial(n) {
+    if (this.special >= 100) return;
+    this.special = Math.min(100, this.special + n);
+    if (this.special >= 100) { this.game.ui.message('SPÉCIAL PRÊT', 0.9); sfx.ready(); this.game.input.rumble(80, 0.4); }
+  }
+
+  // UP : smash si la jauge est pleine, sinon refus (signal visuel + sonore)
+  tryUpper() {
+    if (this.special < 100) { this.game.ui.specialDenied(); sfx.denied(); return false; }
+    this.special = 0;
+    this.smashDone = false;
+    this.startAttack(0, SMASH);
+    return true;
+  }
+
+  // Smash : flash, vibration, onde de choc, tout ce qui casse dans le rayon casse, les ennemis proches décollent
+  smash() {
+    this.smashDone = true;
+    const { game } = this, R = CFG.smashRadius;
+    game.time.hitstop(0.1);
+    game.time.slowmo(0.6);
+    game.juice.shake(1);
+    game.juice.camPunch(0.24);
+    game.juice.energyBurst(this.tip('fistR', _p), 2.6);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; game.juice.dust(this.x + Math.cos(a) * R * 0.6, this.z + Math.sin(a) * R * 0.35, 0.7); }
+    game.ui.flashScreen();
+    game.input.rumble(320, 1);
+    sfx.smash();
+    game.level.breakables.smashArea(this.x, this.z, R);
+    for (const e of game.enemies) {
+      if (!e.active || e.state === 'enter' || Math.hypot(e.x - this.x, (e.z - this.z) * 1.5) > R) continue;
+      const dir = Math.sign(e.x - this.x) || this.facing;
+      this.hitSet.add(e);
+      e.hp -= 22 * CFG.damageMult;
+      e.bowled.clear();
+      e.knock(dir * 2.5, CFG.upperUp * 1.15);
+      game.juice.flash(e.rig);
+      game.ui.combo();
+      if (e.hp <= 0 && !e.ko) game.onKO(e);
+    }
   }
 
   // Charged Punch : John se fige épaule en arrière (frame de préparation du cross) et accumule l'énergie
@@ -138,6 +181,7 @@ export class Hero extends Character {
   hurt(dir) {
     if (this.invuln > 0 || this.state === 'hurt') return false;
     if (this.held) this.release();
+    this.gainSpecial(CFG.specialHurt);
     if (this.state === 'charge') this.stopCharge();
     const { juice } = this.game;
     juice.flash(this.rig);
@@ -185,7 +229,7 @@ export class Hero extends Character {
       if (grabTarget && this.grabT > 0.1) { this.grabT = 0; this.startGrab(grabTarget); }
       else if (input.take('jump', CFG.inputBuffer)) this.startJump();
       else if (input.take('dodge', CFG.inputBuffer)) this.startDodge();
-      else if (input.take('upper', CFG.inputBuffer)) this.startAttack(0, UPPERCUT);
+      else if (input.take('upper', CFG.inputBuffer)) this.tryUpper();
       else if (input.take('attack', CFG.inputBuffer)) this.startAttack(0);
       else if (input.heldFor('attack') > CFG.chargeDelay) this.startCharge();
     }
@@ -289,6 +333,7 @@ export class Hero extends Character {
       const ct = this.model.actions[this.A.clip].time;
       if (ct >= this.A.active[0] && ct <= this.A.active[1]) {
         if (this.A.charged && !this.waveDone) this.shockwave();
+        if (this.A.smash && !this.smashDone) this.smash();
         this.testHits(this.A);
       }
     }
@@ -307,7 +352,7 @@ export class Hero extends Character {
     const canCancel = this.phase === 'rec' || ct >= A.cancel;
     if (canCancel && input.take('dodge', CFG.inputBuffer)) return this.startDodge();
     if (canCancel && input.take('jump', CFG.inputBuffer)) return this.startJump();
-    if (canCancel && A !== UPPERCUT && input.take('upper', CFG.inputBuffer)) return this.startAttack(0, UPPERCUT);
+    if (canCancel && !A.smash && input.take('upper', CFG.inputBuffer) && this.tryUpper()) return;
     if (canCancel && input.take('attack', CFG.inputBuffer)) return this.startAttack(this.comboStep + 1);
     if (this.phase === 'main') {
       const done = A.end ? ct >= A.end : !act.isRunning() || ct >= act.getClip().duration - 1e-3;

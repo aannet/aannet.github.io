@@ -159,6 +159,23 @@ export class Breakables {
     }
   }
 
+  // Smash : tout ce qui casse dans le rayon casse, le reste est soufflé vers l'extérieur
+  smashArea(x, z, radius) {
+    for (const g of this.glass) {
+      const gz = Math.max(g.z0, Math.min(g.z1, z));
+      if (g.intact && Math.hypot(g.x - x, gz - z) < radius) this.shatterGlass(g, Math.sign(g.x - x) || 1);
+    }
+    for (const p of [...this.level.props]) {
+      const t = p.body.translation();
+      const d = Math.hypot(t.x - x, t.z - z);
+      if (d < radius) {
+        const dir = Math.sign(t.x - x) || 1;
+        if (p.kind === 'crate') this.breakCrate(p, dir);
+        else this.impact(p, dir, false, 3.5 * (1 - d / radius) + 1);
+      }
+    }
+  }
+
   removeDebris(d) {
     this.game.scene.remove(d.m);
     this.game.world.removeRigidBody(d.b);

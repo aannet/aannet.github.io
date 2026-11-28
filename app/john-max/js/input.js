@@ -178,6 +178,15 @@ export class Input {
     return { x: gx, z: gz };
   }
 
+  // Vibration : téléphone (Vibration API, Android) et manette (rumble), si activée dans les réglages
+  rumble(ms, strength = 1) {
+    if (!this.cfg?.vibration) return;
+    if (this.mode === 'touch' && navigator.vibrate) navigator.vibrate(strength >= 1 ? [ms * 0.4, 40, ms * 0.6] : ms);
+    for (const gp of navigator.getGamepads ? navigator.getGamepads() : []) {
+      gp?.vibrationActuator?.playEffect?.('dual-rumble', { duration: ms, strongMagnitude: strength, weakMagnitude: strength * 0.6 }).catch(() => {});
+    }
+  }
+
   // Appelé une fois par frame
   poll() {
     const gp = this._pollGamepad();

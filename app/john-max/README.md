@@ -22,7 +22,9 @@
 - Saisie : pousser le stick contre un ennemi debout ; John le tient au col et peut avancer avec lui. Frapper le lance devant, UP (ou frapper + stick arrière) le lance derrière, par-dessus l'épaule (`OverhandThrow`). Il se libère après 2,5 s ; un coup reçu, un saut ou une roulade le relâchent.
 - Décor : un coup fort, la batte ou un ennemi projeté casse les caisses (deux coups légers aussi) ; les poubelles valsent ; un ennemi projeté traverse les vitrines des abribus, qui bloquent le passage tant qu'elles sont intactes. Tout réapparaît après 18 s, quand John est loin.
 - Roulade : direction du stick, invincible sur 75 % de la durée, annule la fin d'un coup ou la charge.
-- Uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
+- Jauge spéciale : se remplit à chaque coup donné (plus avec les coups forts, lancers, Charged Punch) et reçu. Pleine, elle débloque le smash sur UP ; avant, UP est éteint.
+- Smash : uppercut (crochet en lanceur) avec flash plein écran, ralenti, vibration du téléphone ou de la manette, onde de choc ; casse tout le décor cassable dans un rayon de 3 m et fait décoller les ennemis proches.
+- Ancien uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
 - La batte est au fond à gauche : marcher dessus pour la prendre. Elle casse au bout de N coups, une autre tombe 5 s plus tard.
 
 ## Panneau de réglages (⚙)

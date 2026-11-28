@@ -58,6 +58,7 @@ async function boot() {
   const game = { R, world, scene, camera, renderer, CFG, token: null, applyRes, lib };
   game.time = new GameTime();
   game.input = new Input();
+  game.input.cfg = CFG;
   game.juice = new Juice(scene);
   game.ui = new UI(game);
   game.level = new Level(game);

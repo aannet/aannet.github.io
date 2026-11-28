@@ -29,44 +29,69 @@
   #title { z-index: 1; }
   @keyframes vflicker { 0%, 100% { opacity: 1; } 18% { opacity: .9; } 19% { opacity: .78; } 21% { opacity: .95; } 52% { opacity: .86; } 70% { opacity: 1; } 71% { opacity: .82; } 72% { opacity: .97; } }
 
-  /* HUD */
-  #hud { position: fixed; inset: 0; pointer-events: none; padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left)); }
-  #hp { position: absolute; top: max(12px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 8px; font-size: 22px; text-shadow: 2px 2px 0 #000; }
-  #hp-bar { width: min(32vw, 240px); height: 16px; background: #1a1020; border: 3px solid #000; border-radius: 3px; overflow: hidden; box-shadow: 3px 3px 0 #000; }
-  #hp-fill { height: 100%; width: 100%; background: linear-gradient(#ffb35c, #e8641c); transition: width .15s; }
-  #ko-count { position: absolute; top: max(12px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 54px); font-size: 22px; text-shadow: 2px 2px 0 #000; }
-  #fps { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font: 11px/1 ui-monospace, monospace; opacity: .55; }
-  #combo { position: absolute; top: 18%; right: 8%; font-size: clamp(30px, 6vw, 56px); color: var(--yellow); -webkit-text-stroke: 2px #000; text-shadow: 4px 4px 0 #000; opacity: 0; transform: rotate(-6deg); }
+  /* HUD cyberpunk : panneaux sombres aux coins coupés, traits néon fins, chiffres monospace */
+  :root { --neon: #ff8a3c; --cyan: #3fe0ff; --hot: #ff3d6e; --panel: rgba(8, 7, 14, .62); --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --cut: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px)); }
+  #hud { position: fixed; inset: 0; pointer-events: none; font-family: 'Oswald', 'Arial Narrow', sans-serif; letter-spacing: .08em; }
+  #status { position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); width: min(36vw, 280px);
+    padding: 7px 12px 8px; background: var(--panel); clip-path: var(--cut); border-left: 2px solid var(--neon); }
+  #status::after { content: ''; position: absolute; inset: 0; pointer-events: none; clip-path: var(--cut);
+    background: linear-gradient(90deg, rgba(255,138,60,.18), transparent 40%); }
+  #status .name { display: flex; justify-content: space-between; font-size: 13px; color: #f4e9ff; text-shadow: 0 0 6px rgba(255,138,60,.6); }
+  #status .name small { font: 10px var(--mono); color: var(--cyan); opacity: .8; letter-spacing: .1em; }
+  .bar { position: relative; height: 9px; margin-top: 4px; background: rgba(255,255,255,.07); clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%); }
+  .bar > div { height: 100%; transition: width .15s; }
+  .bar::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(8,7,14,.85) 9px 11px); }
+  #hp-fill { width: 100%; background: linear-gradient(90deg, #ff5a1f, var(--neon)); box-shadow: 0 0 8px var(--neon); }
+  #status .sp { display: flex; align-items: center; gap: 8px; margin-top: 5px; font: 10px var(--mono); color: var(--cyan); letter-spacing: .14em; }
+  #status .sp .bar { flex: 1; height: 6px; margin: 0; }
+  #sp-fill { width: 0; background: linear-gradient(90deg, #1b9fd0, var(--cyan)); box-shadow: 0 0 6px var(--cyan); }
+  #status.ready { border-left-color: var(--cyan); }
+  #status.ready #sp-fill { background: linear-gradient(90deg, var(--neon), #fff1e0); box-shadow: 0 0 12px var(--neon); animation: spPulse .6s infinite alternate; }
+  #status.ready .sp { color: #fff1e0; }
+  #status.denied { animation: denied .3s; }
+  @keyframes spPulse { to { filter: brightness(1.5); } }
+  @keyframes denied { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+  #ko-count { position: absolute; top: max(12px, env(safe-area-inset-top)); right: calc(max(14px, env(safe-area-inset-right)) + 54px);
+    padding: 6px 12px; background: var(--panel); clip-path: var(--cut); border-right: 2px solid var(--cyan); font: 15px var(--mono); color: var(--cyan); letter-spacing: .12em; text-shadow: 0 0 6px rgba(63,224,255,.6); }
+  #fps { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font: 10px var(--mono); color: var(--cyan); opacity: .45; }
+  #combo { position: absolute; top: 20%; right: 7%; font: italic 400 clamp(26px, 5vw, 46px)/1 'Russo One', sans-serif; color: #fff; letter-spacing: .04em;
+    text-shadow: 2px 0 var(--hot), -2px 0 var(--cyan), 0 0 14px rgba(255,138,60,.8); opacity: 0; transform: skewX(-8deg); }
   #combo.on { opacity: 1; }
-  #msg { position: absolute; top: 34%; left: 0; right: 0; text-align: center; font-size: clamp(40px, 9vw, 88px); color: #fff; -webkit-text-stroke: 3px #000; text-shadow: 5px 5px 0 var(--pink); opacity: 0; }
+  #msg { position: absolute; top: 33%; left: 0; right: 0; text-align: center; font: 400 clamp(34px, 8vw, 76px)/1 'Russo One', sans-serif; color: #fff; letter-spacing: .06em;
+    text-shadow: 3px 0 var(--hot), -3px 0 var(--cyan), 0 0 24px rgba(255,138,60,.7); opacity: 0; }
   #msg.on { opacity: 1; }
   .pop { animation: pop .22s cubic-bezier(.2, 2.2, .4, 1); }
-  @keyframes pop { from { scale: 1.6; } to { scale: 1; } }
+  @keyframes pop { from { scale: 1.5; filter: blur(2px); } to { scale: 1; filter: none; } }
+  #flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 55%, #fff 0%, rgba(255,190,120,.85) 30%, rgba(255,110,30,.35) 60%, transparent 85%); mix-blend-mode: screen; }
+  #flash.on { animation: flash .45s ease-out; }
+  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
 
-  /* Contrôles tactiles */
+  /* Contrôles tactiles : boutons hexagonaux translucides, contour néon (calque ::before à l'intérieur) */
   #controls { position: fixed; inset: 0; pointer-events: none; }
   body.no-touch #controls { display: none; }
   #stick-zone { position: absolute; left: 0; top: 20%; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
-  #stick-base { position: fixed; width: 116px; height: 116px; margin: -58px 0 0 -58px; border-radius: 50%; border: 3px solid rgba(255,255,255,.35); background: rgba(0,0,0,.18); opacity: 0; transition: opacity .1s; left: 18%; top: 72%; }
+  #stick-base { position: fixed; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%; border: 1.5px solid rgba(63,224,255,.55);
+    background: radial-gradient(circle, rgba(63,224,255,.08), rgba(8,7,14,.35) 70%); box-shadow: 0 0 14px rgba(63,224,255,.25); opacity: 0; transition: opacity .1s; left: 18%; top: 72%; }
   #stick-base.on { opacity: 1; }
-  #stick-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.75); border: 3px solid #000; transform: translate(-50%, -50%); }
-  #stick-hint { position: absolute; left: 12%; bottom: 16%; width: 96px; height: 96px; border-radius: 50%; border: 3px dashed rgba(255,255,255,.25); }
+  #stick-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; border-radius: 50%; background: rgba(63,224,255,.25); border: 1.5px solid var(--cyan);
+    box-shadow: 0 0 10px rgba(63,224,255,.6); transform: translate(-50%, -50%); }
+  #stick-hint { position: absolute; left: 12%; bottom: 16%; width: 92px; height: 92px; border-radius: 50%; border: 1.5px dashed rgba(63,224,255,.3); }
   body.stick-used #stick-hint { display: none; }
-  #btn-attack { position: absolute; right: max(7%, env(safe-area-inset-right)); bottom: 14%; width: 104px; height: 104px; border-radius: 50%;
-    background: var(--pink); border: 4px solid #000; box-shadow: 5px 5px 0 #000; color: #fff; font: inherit; font-size: 30px;
-    -webkit-text-stroke: 1.5px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
-  #btn-attack.down, #btn-upper.down, #btn-dodge.down, #btn-jump.down { transform: translate(3px, 3px) scale(.94); box-shadow: 2px 2px 0 #000; }
-  #btn-dodge { position: absolute; right: calc(max(7%, env(safe-area-inset-right)) + 16px); bottom: calc(14% + 120px); width: 70px; height: 70px; border-radius: 50%;
-    background: #3aa7e8; border: 4px solid #000; box-shadow: 4px 4px 0 #000; color: #fff; font: inherit; font-size: 21px;
-    -webkit-text-stroke: 1.2px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
-  #btn-jump { position: absolute; right: calc(max(7%, env(safe-area-inset-right)) + 126px); bottom: max(10px, calc(14% - 40px)); width: 70px; height: 70px; border-radius: 50%;
-    background: #5bd16a; border: 4px solid #000; box-shadow: 4px 4px 0 #000; color: #fff; font: inherit; font-size: 19px;
-    -webkit-text-stroke: 1.2px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
-  #btn-upper { position: absolute; right: calc(max(7%, env(safe-area-inset-right)) + 112px); bottom: calc(14% + 58px); width: 76px; height: 76px; border-radius: 50%;
-    background: #ff8a2a; border: 4px solid #000; box-shadow: 4px 4px 0 #000; color: #fff; font: inherit; font-size: 24px;
-    -webkit-text-stroke: 1.2px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
-  #btn-gui { position: fixed; top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 44px; height: 44px; border-radius: 10px; border: 3px solid #000;
-    background: #fff; color: #000; font: 22px/1 system-ui, sans-serif; box-shadow: 3px 3px 0 #000; z-index: 20; }
+  .hex { position: absolute; display: grid; place-items: center; padding: 0; border: 0; pointer-events: auto; touch-action: none;
+    clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); background: var(--c); transition: transform .05s, filter .1s;
+    font: 600 15px/1 'Oswald', sans-serif; letter-spacing: .12em; color: #fff; text-shadow: 0 0 6px var(--c); }
+  .hex::before { content: ''; position: absolute; inset: 2px; z-index: -1; clip-path: inherit; background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.12), rgba(8,7,14,.82) 70%); }
+  .hex { isolation: isolate; }
+  .hex.down { transform: scale(.92); filter: brightness(1.5); }
+  #btn-attack { --c: var(--neon); right: max(6%, env(safe-area-inset-right)); bottom: 13%; width: 112px; height: 98px; font-size: 22px; }
+  #btn-upper { --c: #5a5566; right: calc(max(6%, env(safe-area-inset-right)) + 104px); bottom: calc(13% + 64px); width: 80px; height: 70px; color: #8d879a; text-shadow: none; }
+  #btn-upper.ready { --c: var(--neon); color: #fff; text-shadow: 0 0 8px var(--neon); animation: upReady .7s infinite alternate; }
+  @keyframes upReady { to { filter: brightness(1.6) drop-shadow(0 0 6px #ff8a3c); } }
+  #btn-dodge { --c: var(--cyan); right: calc(max(6%, env(safe-area-inset-right)) + 16px); bottom: calc(13% + 108px); width: 80px; height: 70px; }
+  #btn-jump { --c: var(--cyan); right: calc(max(6%, env(safe-area-inset-right)) + 120px); bottom: max(8px, calc(13% - 30px)); width: 80px; height: 70px; }
+  #btn-gui { position: fixed; top: max(10px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 42px; height: 38px; border: 0; z-index: 20;
+    clip-path: var(--cut); background: var(--panel); color: var(--cyan); font: 18px/1 system-ui, sans-serif; box-shadow: inset 0 0 0 1px rgba(63,224,255,.5); }
   .lil-gui.autoPlace { position: fixed !important; top: max(60px, env(safe-area-inset-top)) !important; right: max(10px, env(safe-area-inset-right)) !important; max-height: calc(100% - 70px); overflow-y: auto; z-index: 20; font-family: system-ui, sans-serif; letter-spacing: 0; --widget-height: 24px; }
 
   /* Chargement / écran titre : l'image sans texte, le titre composé en CSS par-dessus */
@@ -156,10 +181,15 @@
 <body>
 <div id="app"></div>
 <div class="vignette"></div>
+<div id="flash"></div>
 
 <div id="hud">
-  <div id="hp"><span>JOHN MAX</span><div id="hp-bar"><div id="hp-fill"></div></div></div>
-  <div id="ko-count">KO 0</div>
+  <div id="status">
+    <div class="name"><span>JOHN MAX</span><small>NEO-TOKYO // 01</small></div>
+    <div class="bar"><div id="hp-fill"></div></div>
+    <div class="sp"><span>SPÉCIAL</span><div class="bar"><div id="sp-fill"></div></div></div>
+  </div></div>
+  <div id="ko-count">KO 00</div>
   <div id="combo"></div>
   <div id="msg"></div>
   <div id="fps"></div>
@@ -168,10 +198,10 @@
 <div id="controls">
   <div id="stick-zone"><div id="stick-hint"></div></div>
   <div id="stick-base"><div id="stick-knob"></div></div>
-  <button id="btn-attack" aria-label="Frapper">PAF</button>
-  <button id="btn-upper" aria-label="Uppercut">UP</button>
-  <button id="btn-dodge" aria-label="Esquive">ESQ</button>
-  <button id="btn-jump" aria-label="Saut">SAUT</button>
+  <button id="btn-attack" class="hex" aria-label="Frapper">PAF</button>
+  <button id="btn-upper" class="hex" aria-label="Smash">UP</button>
+  <button id="btn-dodge" class="hex" aria-label="Esquive">ESQ</button>
+  <button id="btn-jump" class="hex" aria-label="Saut">SAUT</button>
 </div>
 <button id="btn-gui" aria-label="Réglages">⚙</button>
 
@@ -198,7 +228,7 @@
       <section><h3>Tactile</h3><dl>
         <dt>Stick</dt><dd>moitié gauche de l'écran, n'importe où</dd>
         <dt>PAF</dt><dd>frapper · maintenir : Charged Punch</dd>
-        <dt>UP</dt><dd>uppercut</dd>
+        <dt>UP</dt><dd>smash (jauge spéciale pleine)</dd>
         <dt>SAUT</dt><dd>sauter</dd>
         <dt>ESQ</dt><dd>roulade</dd>
         <dt>⚙</dt><dd>réglages du game feel</dd>
@@ -206,7 +236,7 @@
       <section><h3>Manette</h3><dl>
         <dt>Stick / croix</dt><dd>se déplacer</dd>
         <dt>X</dt><dd>frapper · maintenir : Charged Punch</dd>
-        <dt>Y</dt><dd>uppercut</dd>
+        <dt>Y</dt><dd>smash (jauge pleine)</dd>
         <dt>A</dt><dd>sauter</dd>
         <dt>B · RB</dt><dd>roulade</dd>
         <dt>Start</dt><dd>réglages</dd>
@@ -214,7 +244,7 @@
       <section><h3>Clavier</h3><dl>
         <dt><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></dt><dd>se déplacer (ou ZQSD / WASD)</dd>
         <dt><kbd>J</kbd></dt><dd>frapper · maintenir : Charged Punch</dd>
-        <dt><kbd>K</kbd></dt><dd>uppercut</dd>
+        <dt><kbd>K</kbd></dt><dd>smash (jauge pleine)</dd>
         <dt><kbd>Espace</kbd></dt><dd>sauter</dd>
         <dt><kbd>L</kbd> <kbd>Maj</kbd></dt><dd>roulade</dd>
         <dt><kbd>G</kbd></dt><dd>réglages</dd>
@@ -223,7 +253,8 @@
     <div class="moves"><h3>Techniques</h3><dl>
       <dt>Combo</dt><dd>frapper ×3 : jab, cross, crochet qui projette</dd>
       <dt>Charged Punch</dt><dd>maintenir frapper, relâcher : plus c'est chargé, plus ça projette ; onde de choc à distance au-delà de 60 %</dd>
-      <dt>Uppercut</dt><dd>envoie en l'air · enchaîne pendant un combo</dd>
+      <dt>Jauge spéciale</dt><dd>se remplit en frappant et en encaissant ; pleine, elle débloque le smash</dd>
+      <dt>Smash</dt><dd>uppercut dévastateur : flash, vibration, casse tout le décor dans un rayon de 3 m et fait décoller les ennemis proches</dd>
       <dt>Juggle</dt><dd>frapper un ennemi en l'air le relance</dd>
       <dt>Coup aérien</dt><dd>frapper pendant un saut, une fois par saut : fait tomber</dd>
       <dt>Saisie</dt><dd>pousser le stick contre un ennemi : John l'attrape ; on peut avancer avec lui</dd>

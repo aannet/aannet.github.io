@@ -24,6 +24,9 @@ export const AIR_STRIKE = { name: 'air', clip: 'Punch_Cross', from: 0.1, speed: 
 // Charged Punch : le cross repart de sa frame de préparation (0,1 s), plus vite et avec une grosse fenêtre.
 export const CHARGED = { name: 'charged', clip: 'Punch_Cross', from: 0.1, speed: 1.5, active: [0.2, 0.38], cancel: 0.62, end: 0.82, tip: 'fistR', r: 0.42, dmg: 20, heavy: true, charged: true, lunge: 2.4 };
 
+// Smash : l'uppercut, réservé à la jauge pleine. Les effets de zone se déclenchent au début de la fenêtre active.
+export const SMASH = { ...UPPERCUT, name: 'smash', smash: true, speed: 1.05 };
+
 const _l = new THREE.Vector3();
 
 // Résolution d'un coup du héros sur un ennemi debout.
@@ -31,6 +34,7 @@ export function resolveHit(game, A, enemy, point, k = 1) {
   const { juice, time, hero } = game;
   const dir = Math.sign(enemy.x - hero.x) || hero.facing;
   if (A.charged) return resolveCharged(game, enemy, point, dir, hero.chargeK * k);
+  hero.gainSpecial(A.heavy ? CFG.specialHeavy : CFG.specialHit);
   enemy.hp -= A.dmg * CFG.damageMult;
   const ko = enemy.hp <= 0;
   const heavy = A.heavy || ko;
@@ -58,6 +62,7 @@ export function resolveHit(game, A, enemy, point, k = 1) {
 function resolveCharged(game, enemy, point, dir, k) {
   const { juice, time } = game;
   enemy.hp -= (CHARGED.dmg + 30 * k) * CFG.damageMult;
+  game.hero.gainSpecial(CFG.specialHeavy * (1 + k));
   const ko = enemy.hp <= 0;
   time.hitstop(CFG.hitstopHeavy + 0.1 * k);
   if (k > 0.95) time.slowmo(0.35);
@@ -75,6 +80,7 @@ function resolveCharged(game, enemy, point, dir, k) {
 // Projection d'un ennemi saisi : dégâts immédiats, puis chute animée (renverse ceux qu'il percute)
 export function resolveThrow(game, enemy, dir) {
   enemy.hp -= CFG.throwDmg * CFG.damageMult;
+  game.hero.gainSpecial(CFG.specialHeavy);
   enemy.bowled.clear();
   enemy.knock(dir * CFG.throwV, CFG.throwUp);
   enemy.facing = -dir;
@@ -89,6 +95,7 @@ export function resolveJuggle(game, A, enemy, point) {
   const { juice, time, hero } = game;
   const m = A.bat ? CFG.batMult : 1;
   const dir = Math.sign(enemy.x - hero.x) || hero.facing;
+  hero.gainSpecial(CFG.specialHit);
   if (A.launcher) enemy.juggle(dir * CFG.upperX, CFG.upperUp * 0.85);
   else enemy.juggle(dir * CFG.juggleX * (A.heavy ? 2.5 * m : 1), CFG.juggleUp * (A.heavy ? 1.15 : 1));
   enemy.t = 0; // relance le délai de relevé / respawn tant qu'on le garde en l'air
