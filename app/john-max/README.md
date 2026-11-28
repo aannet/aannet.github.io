@@ -20,6 +20,7 @@
 - Charged Punch : PAF maintenu. John se fige épaule en arrière, l'énergie orange monte au poing (halo, étincelles aspirées, zoom), puis le cross part au relâchement. Dégâts, projection et onde de choc à distance selon la charge ; ralenti à pleine charge.
 - Saut : contrôle réduit en l'air, un coup aérien par saut (fait tomber, rattrape les ennemis en l'air).
 - Saisie : pousser le stick contre un ennemi debout ; John le tient au col et peut avancer avec lui. Frapper le lance devant, UP (ou frapper + stick arrière) le lance derrière, par-dessus l'épaule (`OverhandThrow`). Il se libère après 2,5 s ; un coup reçu, un saut ou une roulade le relâchent.
+- Décor : un coup fort, la batte ou un ennemi projeté casse les caisses (deux coups légers aussi) ; les poubelles valsent ; un ennemi projeté traverse les vitrines des abribus, qui bloquent le passage tant qu'elles sont intactes. Tout réapparaît après 18 s, quand John est loin.
 - Roulade : direction du stick, invincible sur 75 % de la durée, annule la fin d'un coup ou la charge.
 - Uppercut : seul ou en annulation d'un jab/cross. Il envoie l'ennemi à la verticale. Les coups suivants le maintiennent en l'air (juggle) et le combo repart du jab.
 - La batte est au fond à gauche : marcher dessus pour la prendre. Elle casse au bout de N coups, une autre tombe 5 s plus tard.
@@ -45,6 +46,7 @@ Tout le game feel est réglable en direct : vitesse des animations, hitstop, sha
 | `level.js` | Rue jouable : physique statique, décor poussable, éclairage |
 | `decor.js` | Habillage Neo-Tokyo : façade peinte, néons en atlas, halos et reflets fusionnés, pluie GPU, vapeur |
 | `blobs.js` | Ombres « blob » instanciées (remplace la shadow map) |
+| `breakables.js` | Décor qui casse : caisses en planches physiques, poubelles qui valsent, vitrines d'abribus qui éclatent, respawn hors champ |
 | `bat.js` | Batte ramassable |
 
 ## Choix d'optimisation (feintes assumées)

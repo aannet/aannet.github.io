@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { G, groups } from './config.js';
 import { toonGradient, toonMesh } from './toon.js';
 import { Decor } from './decor.js';
+import { Breakables } from './breakables.js';
 import { sfx } from './audio.js';
 
 export const ARENA = { minX: -9, maxX: 9, minZ: -1.45, maxZ: 1.15, wallZ: -2.0, frontZ: 1.9 };
@@ -113,15 +114,22 @@ export class Level {
     }));
     this.canMat = toon(0x3f5a50);
     this.lidMat = toon(0x2e443c);
+    this.breakables = new Breakables(game, this);
     this.resetProps();
   }
 
   resetProps() {
-    const { scene, R, world } = this.game;
+    const { scene, world } = this.game;
     for (const p of this.props) { scene.remove(p.mesh); world.removeRigidBody(p.body); }
     this.props = [];
+    for (const d of PROP_DEFS) this.spawnProp(d);
+    this.breakables && this.breakables.reset();
+  }
+
+  spawnProp(d, dropY = 0) {
+    const { scene, R, world } = this.game;
     const cg = groups(G.PROPS, 0xffff);
-    for (const d of PROP_DEFS) {
+    {
       let mesh, col;
       if (d.kind === 'crate') {
         mesh = toonMesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), this.crateMat, scene);
@@ -133,10 +141,12 @@ export class Level {
         col = R.ColliderDesc.cylinder(0.36, 0.25).setDensity(0.18);
       }
       const body = world.createRigidBody(
-        R.RigidBodyDesc.dynamic().setTranslation(d.x, d.y, d.z).setLinearDamping(0.1).setAngularDamping(0.3).setCcdEnabled(true)
+        R.RigidBodyDesc.dynamic().setTranslation(d.x, d.y + dropY, d.z).setLinearDamping(0.1).setAngularDamping(0.3).setCcdEnabled(true)
       );
       world.createCollider(col.setFriction(0.7).setRestitution(0.2).setCollisionGroups(cg), body);
-      this.props.push({ mesh, body, vprev: 0 });
+      const p = { mesh, body, vprev: 0, def: d, kind: d.kind, hits: 0 };
+      this.props.push(p);
+      return p;
     }
   }
 
@@ -153,8 +163,9 @@ export class Level {
     }
   }
 
-  // Appelé à chaque frame (temps réel) : pluie, vapeur
+  // Appelé à chaque frame (temps réel) : pluie, vapeur, débris
   update(camX, t, dt) {
+    this.breakables.update(dt);
     this.decor.update(t, camX, dt);
   }
 }

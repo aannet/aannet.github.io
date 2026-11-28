@@ -56,6 +56,8 @@ export class Character {
   clampArena() {
     this.x = Math.max(ARENA.minX, Math.min(ARENA.maxX, this.x));
     this.z = Math.max(ARENA.minZ, Math.min(ARENA.maxZ, this.z));
+    if (this.y === 0 && !['knock', 'grabbed', 'down'].includes(this.state)) this.game.level.breakables?.block(this, this.lastX ?? this.x);
+    this.lastX = this.x;
   }
 
   // Avance l'animation et place le modèle

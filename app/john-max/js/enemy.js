@@ -200,6 +200,7 @@ export class Enemy extends Character {
         const a = this.model.actions.Hit_Knockback;
         const air = this.y > 0;
         this.x += this.vx * dt;
+        if (Math.abs(this.vx) > 1.5) game.level.breakables.sweep(this);
         if (air) {
           this.vy -= CFG.gravity * dt;
           this.y += this.vy * dt;

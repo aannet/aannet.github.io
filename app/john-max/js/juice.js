@@ -183,7 +183,7 @@ export class Juice {
     if (head) this.droplets(head, dir, (4 + power * 4) * q);
   }
 
-  sparks(p, dir, n, power = 0) {
+  sparks(p, dir, n, power = 0, color = null) {
     for (let k = 0; k < Math.round(n); k++) {
       const i = this.sNext;
       this.sNext = (this.sNext + 1) % MAXS;
@@ -195,7 +195,8 @@ export class Juice {
       this.sLife[i] = 0.12 + Math.random() * 0.2;
       for (const o of [0, 3]) { this.sPos[i * 6 + o] = p.x; this.sPos[i * 6 + o + 1] = p.y; this.sPos[i * 6 + o + 2] = p.z; }
       const w = Math.random();
-      for (const o of [0, 3]) { this.sCol[i * 6 + o] = 1; this.sCol[i * 6 + o + 1] = 0.55 + w * 0.4; this.sCol[i * 6 + o + 2] = 0.15 + w * 0.5; }
+      const c = color || [1, 0.55 + w * 0.4, 0.15 + w * 0.5];
+      for (const o of [0, 3]) { this.sCol[i * 6 + o] = c[0]; this.sCol[i * 6 + o + 1] = c[1]; this.sCol[i * 6 + o + 2] = c[2]; }
     }
   }
 

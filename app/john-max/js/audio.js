@@ -158,6 +158,40 @@ export const sfx = {
     noiseBurst(t, 0.1, 500 * rnd(0.3), 3, 0.5 * k);
     thump(t, 90, 50, 0.1, 0.4 * k);
   },
+  wood() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    for (let i = 0; i < 3; i++) noiseBurst(t + i * 0.03, 0.08, 900 + i * 500, 3, 0.7);
+    thump(t, 160, 60, 0.18, 0.8);
+  },
+  glass() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    noiseBurst(t, 0.5, 6000, 0.8, 0.8, 'highpass');
+    for (let i = 0; i < 8; i++) {
+      const o = ctx.createOscillator(), g = ctx.createGain(), s = t + Math.random() * 0.35;
+      o.type = 'sine';
+      o.frequency.value = 2500 + Math.random() * 3500;
+      g.gain.setValueAtTime(0.12, s);
+      g.gain.exponentialRampToValueAtTime(0.001, s + 0.12);
+      o.connect(g).connect(master);
+      o.start(s); o.stop(s + 0.14);
+    }
+  },
+  clang() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    for (const f of [320, 487, 761]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square';
+      o.frequency.value = f * rnd(0.1);
+      g.gain.setValueAtTime(0.08, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      o.connect(g).connect(master);
+      o.start(t); o.stop(t + 0.32);
+    }
+    noiseBurst(t, 0.08, 1500, 2, 0.4);
+  },
   pickup() {
     if (!ctx) return;
     const t = ctx.currentTime;

@@ -353,6 +353,7 @@ export class Hero extends Character {
 
   testHits(A) {
     const pts = this.points(A);
+    if (this.game.level.breakables.hitProps(pts, A.r, this.facing, A.heavy || !!A.bat, this.hitSet) && A.bat && this.bat) this.bat.used();
     for (const e of this.game.enemies) {
       if (this.hitSet.has(e) || !e.active) continue;
       const air = e.airborne();
