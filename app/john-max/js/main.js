@@ -82,7 +82,7 @@ async function boot() {
 
   const gui = buildGui(GUI, game);
   let guiOn = false;
-  const toggleGui = () => { guiOn = !guiOn; gui.show(guiOn); if (guiOn) gui.open(); };
+  const toggleGui = () => { guiOn = !guiOn; gui.show(guiOn); if (guiOn) gui.open(); document.body.classList.toggle('gui-open', guiOn); };
   document.getElementById('btn-gui').addEventListener('click', toggleGui);
   game.input.onMenu = toggleGui;
 
@@ -156,7 +156,8 @@ async function boot() {
   });
   document.getElementById('pause-options').addEventListener('click', () => optEl.classList.add('on'));
   document.getElementById('opt-back').addEventListener('click', () => optEl.classList.remove('on'));
-  document.getElementById('opt-advanced').addEventListener('click', () => { optEl.classList.remove('on'); setPause(false); if (!guiOn) toggleGui(); });
+  // le panneau avancé s'ouvre par-dessus la pause : le jeu reste gelé, l'image se redessine pour voir l'effet des réglages
+  document.getElementById('opt-advanced').addEventListener('click', () => { optEl.classList.remove('on'); if (!guiOn) toggleGui(); });
   applyOpts();
 
   // Caméra
@@ -261,7 +262,11 @@ async function boot() {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     game.input.poll();
-    if (game.paused) { requestAnimationFrame(frame); return; }
+    if (game.paused) {
+      if (guiOn) { updateCamera(0); renderer.render(scene, camera); }
+      requestAnimationFrame(frame);
+      return;
+    }
     game.time.advance(dt, tick);
     if (portraitDone < 30 && ++portraitDone === 30) snapshotPortrait(); // une fois le héros posé dans sa garde
     game.juice.update(dt);

@@ -152,6 +152,9 @@
   /* pause et K.O. : voile sombre, titre et plaques */
   #pause { position: fixed; inset: 0; z-index: 35; display: none; place-items: center; align-content: center; gap: 12px; background: rgba(6,5,10,.72); }
   #pause.on { display: grid; }
+  /* réglages avancés ouverts en pause : voile allégé pour voir l'effet des réglages */
+  body.gui-open #pause { background: rgba(6,5,10,.18); justify-items: start; padding-left: 4vw; }
+  body.gui-open #pause h2, body.gui-open #pause p { display: none; }
   #pause h2 { margin: 0 0 6px; font: 400 clamp(38px, 8vw, 72px)/1 'Russo One', 'Impact', sans-serif; letter-spacing: .06em; color: #fff; text-shadow: 0 0 .3em rgba(255,110,30,.7), 3px 0 0 rgba(255,61,110,.6), -3px 0 0 rgba(63,224,255,.5); }
   #pause p { margin: -4px 0 6px; font: 600 15px/1 'Oswald', sans-serif; letter-spacing: .2em; color: #cbbfd6; text-align: center; }
   #pause .pwrap { min-width: 250px; }
@@ -169,7 +172,7 @@
   #options .row2 { display: flex; gap: 8px; margin-top: 6px; }
   #options .row2 .pwrap { flex: 1; }
   #options .row2 .plate { padding: 10px; font-size: 15px; }
-  .lil-gui.autoPlace { position: fixed !important; top: max(60px, env(safe-area-inset-top)) !important; right: max(10px, env(safe-area-inset-right)) !important; max-height: calc(100% - 70px); overflow-y: auto; z-index: 20; font-family: system-ui, sans-serif; letter-spacing: 0; --widget-height: 24px; }
+  .lil-gui.autoPlace { position: fixed !important; top: max(60px, env(safe-area-inset-top)) !important; right: max(10px, env(safe-area-inset-right)) !important; max-height: calc(100% - 70px); overflow-y: auto; z-index: 45; font-family: system-ui, sans-serif; letter-spacing: 0; --widget-height: 24px; }
 
   /* Chargement / écran titre : l'image sans texte, le titre composé en CSS par-dessus */
   #loader { position: fixed; inset: 0; z-index: 30; transition: opacity .3s;
