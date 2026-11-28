@@ -95,7 +95,7 @@ async function boot() {
     camera.position.set(camX.v + shake.x, 2.9 + shake.y, 7.4);
     look.set(camX.v + shake.x * 0.5, 1.0 + shake.y * 0.5, -0.45);
     camera.lookAt(look);
-    const fov = BASE_FOV * (1 - game.juice.punch);
+    const fov = BASE_FOV * (1 - game.juice.punch - game.juice.chargeZoom * 0.07);
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     game.level.update(camX.v, game.time.real, dt);
   }

@@ -55,7 +55,10 @@
   #btn-attack { position: absolute; right: max(7%, env(safe-area-inset-right)); bottom: 14%; width: 104px; height: 104px; border-radius: 50%;
     background: var(--pink); border: 4px solid #000; box-shadow: 5px 5px 0 #000; color: #fff; font: inherit; font-size: 30px;
     -webkit-text-stroke: 1.5px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
-  #btn-attack.down, #btn-upper.down { transform: translate(3px, 3px) scale(.94); box-shadow: 2px 2px 0 #000; }
+  #btn-attack.down, #btn-upper.down, #btn-dodge.down { transform: translate(3px, 3px) scale(.94); box-shadow: 2px 2px 0 #000; }
+  #btn-dodge { position: absolute; right: calc(max(7%, env(safe-area-inset-right)) + 16px); bottom: calc(14% + 120px); width: 70px; height: 70px; border-radius: 50%;
+    background: #3aa7e8; border: 4px solid #000; box-shadow: 4px 4px 0 #000; color: #fff; font: inherit; font-size: 21px;
+    -webkit-text-stroke: 1.2px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
   #btn-upper { position: absolute; right: calc(max(7%, env(safe-area-inset-right)) + 112px); bottom: calc(14% + 58px); width: 76px; height: 76px; border-radius: 50%;
     background: #ff8a2a; border: 4px solid #000; box-shadow: 4px 4px 0 #000; color: #fff; font: inherit; font-size: 24px;
     -webkit-text-stroke: 1.2px #000; pointer-events: auto; touch-action: none; transition: transform .05s; }
@@ -144,6 +147,7 @@
   <div id="stick-base"><div id="stick-knob"></div></div>
   <button id="btn-attack" aria-label="Frapper">PAF</button>
   <button id="btn-upper" aria-label="Uppercut">UP</button>
+  <button id="btn-dodge" aria-label="Esquive">ESQ</button>
 </div>
 <button id="btn-gui" aria-label="Réglages">⚙</button>
 
@@ -159,7 +163,7 @@
       <button id="play" type="button">JOUER</button>
     </div>
   </div>
-  <small>Stick à gauche, PAF frappe, UP uppercut · manette Bluetooth reconnue au premier bouton<br>Clavier : flèches, J, K · G pour les réglages<br>Plein écran direct : menu du navigateur → « Ajouter à l'écran d'accueil »</small>
+  <small>Stick à gauche · PAF frappe (maintenu : Charged Punch) · UP uppercut · ESQ roulade<br>Manette reconnue au premier bouton · Clavier : flèches, J, K, L · G pour les réglages<br>Plein écran direct : menu du navigateur → « Ajouter à l'écran d'accueil »</small>
 </div>
 
 <div id="rotate"><div class="phone"></div><div>Tourne ton téléphone</div></div>

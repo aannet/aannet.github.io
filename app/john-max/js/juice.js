@@ -112,6 +112,49 @@ export class Juice {
     this.rays = new SpritePool(scene, rays, 0xfff0d8, 5);
     this.rings = new SpritePool(scene, ring, 0xff9a3c, 4);
     this.dusts = new SpritePool(scene, puff, 0x8a8698, 16, THREE.NormalBlending, 9);
+
+    // Énergie du Charged Punch : halo au poing (persistant pendant la charge) + onde orange au relâchement
+    this.chargeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, color: 0xff7a1a, transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.chargeGlow.visible = false;
+    this.chargeGlow.renderOrder = 12;
+    scene.add(this.chargeGlow);
+    this.chargeZoom = 0;
+    this.energyRings = new SpritePool(scene, ring, 0xff6a10, 4);
+  }
+
+  // Appelé à chaque tick pendant la charge (p = poing), p null pour arrêter
+  charge(p, k) {
+    const g = this.chargeGlow;
+    this.chargeZoom = p ? k : 0;
+    if (!p) { g.visible = false; return; }
+    g.visible = true;
+    g.position.copy(p);
+    const s = (0.25 + 0.65 * k) * (0.9 + Math.random() * 0.2);
+    g.scale.set(s, s, 1);
+    g.material.opacity = 0.55 + 0.45 * k;
+    // étincelles aspirées vers le poing, plus nombreuses à pleine charge
+    const n = k >= 1 ? 3 : Math.random() < 0.5 + k ? 1 : 0;
+    for (let j = 0; j < n; j++) {
+      const i = this.sNext;
+      this.sNext = (this.sNext + 1) % MAXS;
+      const a = Math.random() * Math.PI * 2, b = Math.random() * Math.PI - Math.PI / 2, r = 0.45 + Math.random() * 0.3;
+      const ox = Math.cos(a) * Math.cos(b) * r, oy = Math.sin(b) * r, oz = Math.sin(a) * Math.cos(b) * r * 0.6;
+      this.sVel[i * 3] = -ox * 6; this.sVel[i * 3 + 1] = -oy * 6 + 0.8; this.sVel[i * 3 + 2] = -oz * 6;
+      this.sLife[i] = 0.14;
+      for (const o of [0, 3]) {
+        this.sPos[i * 6 + o] = p.x + ox; this.sPos[i * 6 + o + 1] = p.y + oy; this.sPos[i * 6 + o + 2] = p.z + oz;
+        this.sCol[i * 6 + o] = 1; this.sCol[i * 6 + o + 1] = 0.45 + Math.random() * 0.25; this.sCol[i * 6 + o + 2] = 0.08;
+      }
+    }
+  }
+
+  // Libération de l'énergie : anneaux orange concentriques + éclat
+  energyBurst(p, s) {
+    this.energyRings.spawn(p, 0.28, 0.3, 2.4 * s, 1, 0);
+    this.energyRings.spawn(p, 0.4, 0.2, 3.6 * s, 0.6, 0);
+    this.rays.spawn(p, 0.14, 0.8, 2.6 * s, 1);
+    this.sparks(p, Math.random() < 0.5 ? 1 : -1, 14 * CFG.particles, 2);
+    this.sparks(p, Math.random() < 0.5 ? 1 : -1, 14 * CFG.particles, 2);
   }
 
   shake(amount) {
@@ -214,6 +257,7 @@ export class Juice {
     this.rays.update(dt);
     this.rings.update(dt);
     this.dusts.update(dt);
+    this.energyRings.update(dt);
   }
 
   // Décalage de caméra (shake = trauma², bruit pseudo-aléatoire lisse)

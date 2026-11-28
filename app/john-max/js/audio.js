@@ -57,7 +57,45 @@ function thump(t, f0, f1, dur, gain, dest = master) {
   o.stop(t + dur + 0.02);
 }
 
+let chargeNodes = null;
+
 export const sfx = {
+  // Montée d'énergie : grondement en dent de scie dont la fréquence monte pendant la charge
+  chargeStart(full = 0.9) {
+    if (!ctx) return;
+    this.chargeStop();
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70, t);
+    o.frequency.exponentialRampToValueAtTime(240, t + full);
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(300, t);
+    f.frequency.exponentialRampToValueAtTime(1800, t + full);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.14, t + 0.1);
+    o.connect(f).connect(g).connect(master);
+    o.start(t);
+    chargeNodes = { o, g };
+  },
+  chargeStop() {
+    if (!ctx || !chargeNodes) return;
+    const t = ctx.currentTime, { o, g } = chargeNodes;
+    g.gain.cancelScheduledValues(t);
+    g.gain.setValueAtTime(g.gain.value, t);
+    g.gain.linearRampToValueAtTime(0, t + 0.05);
+    o.stop(t + 0.06);
+    chargeNodes = null;
+  },
+  // Impact chargé : coup lourd + basse profonde + claquement
+  charged(k = 1) {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.punch(true);
+    thump(t, 120, 26, 0.5 + 0.3 * k, 1, shaper);
+    noiseBurst(t, 0.35 + 0.2 * k, 500, 0.6, 0.9, 'lowpass', shaper);
+    noiseBurst(t + 0.02, 0.08, 4000, 1.5, 0.5);
+  },
   punch(heavy = false) {
     if (!ctx) return;
     const t = ctx.currentTime;

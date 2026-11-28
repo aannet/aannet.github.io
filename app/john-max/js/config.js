@@ -42,6 +42,16 @@ export const CFG = {
   juggleUp: 4.2,
   juggleX: 0.8,
 
+  // Charged Punch (PAF maintenu)
+  chargeDelay: 0.28,
+  chargeFull: 0.9,
+  chargeKnock: 1.6,
+  chargeWave: 2.6,
+
+  // Esquive (roulade)
+  dodgeDist: 2.8,
+  dodgeInvuln: 0.75,
+
   // Combat
   inputBuffer: 0.25,
   damageMult: 1,

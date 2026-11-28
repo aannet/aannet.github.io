@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { Character } from './character.js';
-import { FIST_COMBO, BAT_COMBO, UPPERCUT, resolveHit, resolveJuggle } from './combat.js';
+import { FIST_COMBO, BAT_COMBO, UPPERCUT, CHARGED, resolveHit, resolveJuggle } from './combat.js';
 import { sfx } from './audio.js';
 
 const _p = new THREE.Vector3();
 const JOG_SPEED = 3.0; // vitesse naturelle du clip Jog_Fwd_Loop (m/s), pour caler les pieds
+const ROLL_UP = 1.2; // instant du clip Roll où John est de nouveau debout
 
 // John Max : débardeur et cargo noirs, bottes acier, bandages, tatouage Oni sur le bras droit.
 const LOOK = {
@@ -24,6 +25,9 @@ export class Hero extends Character {
     this.invuln = 0;
     this.bat = null;
     this.hitPoints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    this.chargeT = 0;
+    this.chargeK = 0;
+    this.dodgeDir = new THREE.Vector2(1, 0);
   }
 
   combo() {
@@ -40,12 +44,45 @@ export class Hero extends Character {
     this.whooshed = false;
     const mx = this.game.input.move.x;
     if (Math.abs(mx) > 0.3) this.facing = Math.sign(mx);
-    this.anim(this.A.clip, { fade: 0.06, speed: this.A.speed, restart: true });
+    this.anim(this.A.clip, { fade: 0.06, speed: this.A.speed, restart: true, from: this.A.from || 0 });
+    this.waveDone = false;
     this.setState('attack');
+  }
+
+  // Charged Punch : John se fige épaule en arrière (frame de préparation du cross) et accumule l'énergie
+  startCharge() {
+    const mx = this.game.input.move.x;
+    if (Math.abs(mx) > 0.3) this.facing = Math.sign(mx);
+    this.chargeT = 0;
+    this.chargeK = 0;
+    this.anim('Punch_Cross', { fade: 0.1, restart: true, from: 0.1, speed: 0 });
+    sfx.chargeStart();
+    this.setState('charge');
+  }
+
+  stopCharge() {
+    sfx.chargeStop();
+    this.game.juice.charge(null, 0);
+  }
+
+  // Roulade : direction du stick (ou devant), invincible sur la plus grande partie
+  startDodge() {
+    const { move } = this.game.input;
+    this.dodgeDir.set(move.x, move.z * 0.7);
+    if (this.dodgeDir.lengthSq() < 0.05) this.dodgeDir.set(this.facing, 0);
+    this.dodgeDir.normalize();
+    if (Math.abs(this.dodgeDir.x) > 0.2) this.facing = Math.sign(this.dodgeDir.x);
+    this.dodgeDur = ROLL_UP / (1.5 * CFG.animSpeed);
+    this.invuln = this.dodgeDur * CFG.dodgeInvuln;
+    this.dusted = false;
+    this.anim('Roll', { fade: 0.05, restart: true, speed: 1.5 });
+    sfx.whoosh(true);
+    this.setState('dodge');
   }
 
   hurt(dir) {
     if (this.invuln > 0 || this.state === 'hurt') return false;
+    if (this.state === 'charge') this.stopCharge();
     const { juice } = this.game;
     juice.flash(this.rig);
     juice.shake(0.25);
@@ -86,11 +123,32 @@ export class Hero extends Character {
       } else {
         this.anim(this.bat ? 'Sword_Idle' : 'Guard', { fade: 0.2, speed: this.bat ? 1 : 0, loop: true });
       }
-      if (input.take('upper', CFG.inputBuffer)) this.startAttack(0, UPPERCUT);
+      if (input.take('dodge', CFG.inputBuffer)) this.startDodge();
+      else if (input.take('upper', CFG.inputBuffer)) this.startAttack(0, UPPERCUT);
       else if (input.take('attack', CFG.inputBuffer)) this.startAttack(0);
+      else if (input.heldFor('attack') > CFG.chargeDelay) this.startCharge();
     }
 
     if (this.state === 'attack') this.updateAttack(dt);
+
+    if (this.state === 'charge') {
+      this.chargeT += dt;
+      this.chargeK = Math.min(1, this.chargeT / CFG.chargeFull);
+      this.game.juice.charge(this.tip('fistR', _p), this.chargeK);
+      if (input.heldFor('attack') === 0) { this.stopCharge(); input.take('attack', 1); this.startAttack(0, CHARGED); }
+      else if (input.take('dodge', CFG.inputBuffer)) { this.stopCharge(); this.startDodge(); }
+    }
+
+    if (this.state === 'dodge') {
+      const k = Math.min(1, this.t / this.dodgeDur), prev = Math.min(1, (this.t - dt) / this.dodgeDur);
+      const ease = (u) => 1 - (1 - u) * (1 - u);
+      const d = (ease(k) - ease(Math.max(0, prev))) * CFG.dodgeDist;
+      this.x += this.dodgeDir.x * d;
+      this.z += this.dodgeDir.y * d;
+      lean = -this.dodgeDir.y * 0.6;
+      if (!this.dusted && k > 0.45) { this.dusted = true; this.game.juice.dust(this.x, this.z, 0.6); }
+      if (k >= 1) this.setState('free');
+    }
 
     if (this.state === 'hurt' && this.t >= 0.35) this.setState('free');
 
@@ -100,7 +158,10 @@ export class Hero extends Character {
     // hitbox active seulement sur la fenêtre utile du clip
     if (this.state === 'attack' && this.phase === 'main') {
       const ct = this.model.actions[this.A.clip].time;
-      if (ct >= this.A.active[0] && ct <= this.A.active[1]) this.testHits(this.A);
+      if (ct >= this.A.active[0] && ct <= this.A.active[1]) {
+        if (this.A.charged && !this.waveDone) this.shockwave();
+        this.testHits(this.A);
+      }
     }
   }
 
@@ -112,7 +173,10 @@ export class Hero extends Character {
       if (ct < A.active[1]) this.x += this.facing * A.lunge * dt;
       if (!this.whooshed && ct >= A.active[0] * 0.7) { sfx.whoosh(A.heavy); this.whooshed = true; }
     }
+    // PAF maintenu pendant un coup : on bascule en charge
+    if (!A.charged && input.heldFor('attack') > CFG.chargeDelay) return this.startCharge();
     const canCancel = this.phase === 'rec' || ct >= A.cancel;
+    if (canCancel && input.take('dodge', CFG.inputBuffer)) return this.startDodge();
     if (canCancel && A !== UPPERCUT && input.take('upper', CFG.inputBuffer)) return this.startAttack(0, UPPERCUT);
     if (canCancel && input.take('attack', CFG.inputBuffer)) return this.startAttack(this.comboStep + 1);
     if (this.phase === 'main') {
@@ -121,6 +185,22 @@ export class Hero extends Character {
       else if (done) this.setState('free');
     } else if (!act.isRunning() || ct >= act.getClip().duration - 1e-3) {
       this.setState('free');
+    }
+  }
+
+  // Onde de choc du Charged Punch : touche aussi les ennemis devant, à distance (si assez chargé)
+  shockwave() {
+    this.waveDone = true;
+    const k = this.chargeK;
+    this.game.juice.energyBurst(this.tip('fistR', _p), 0.4 + k);
+    if (k < 0.6) return;
+    for (const e of this.game.enemies) {
+      if (this.hitSet.has(e) || !e.hittable()) continue;
+      const dx = (e.x - this.x) * this.facing;
+      if (dx > 0 && dx < CFG.chargeWave * k && Math.abs(e.z - this.z) < 1) {
+        this.hitSet.add(e);
+        resolveHit(this.game, this.A, e, _p.set(e.x, 1.2, e.z), 0.55);
+      }
     }
   }
 

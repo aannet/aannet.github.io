@@ -18,12 +18,16 @@ export const BAT_COMBO = [
 // Lanceur vertical. Pas d'uppercut dans les packs gratuits : le crochet, plus rapide, en tient lieu.
 export const UPPERCUT = { name: 'upper', clip: 'Melee_Hook', rec: 'Melee_Hook_Rec', speed: 1.2, active: [0.15, 0.3], cancel: 0.47, tip: 'fistR', r: 0.32, dmg: 14, heavy: true, launcher: true, lunge: 0.3 };
 
+// Charged Punch : le cross repart de sa frame de préparation (0,1 s), plus vite et avec une grosse fenêtre.
+export const CHARGED = { name: 'charged', clip: 'Punch_Cross', from: 0.1, speed: 1.5, active: [0.2, 0.38], cancel: 0.62, end: 0.82, tip: 'fistR', r: 0.42, dmg: 20, heavy: true, charged: true, lunge: 2.4 };
+
 const _l = new THREE.Vector3();
 
 // Résolution d'un coup du héros sur un ennemi debout.
-export function resolveHit(game, A, enemy, point) {
+export function resolveHit(game, A, enemy, point, k = 1) {
   const { juice, time, hero } = game;
   const dir = Math.sign(enemy.x - hero.x) || hero.facing;
+  if (A.charged) return resolveCharged(game, enemy, point, dir, hero.chargeK * k);
   enemy.hp -= A.dmg * CFG.damageMult;
   const ko = enemy.hp <= 0;
   const heavy = A.heavy || ko;
@@ -44,6 +48,24 @@ export function resolveHit(game, A, enemy, point) {
   } else {
     enemy.lightHit(dir);
   }
+  if (ko) game.onKO(enemy);
+}
+
+// Charged Punch : dégâts et projection selon la charge (k de 0 à 1), énergie orange, onde de choc.
+function resolveCharged(game, enemy, point, dir, k) {
+  const { juice, time } = game;
+  enemy.hp -= (CHARGED.dmg + 30 * k) * CFG.damageMult;
+  const ko = enemy.hp <= 0;
+  time.hitstop(CFG.hitstopHeavy + 0.1 * k);
+  if (k > 0.95) time.slowmo(0.35);
+  juice.shake(CFG.shakeHeavy * (1.1 + 0.6 * k));
+  juice.camPunch(CFG.camPunch * (1.5 + k));
+  juice.flash(enemy.rig);
+  juice.hit(point, dir, 2, enemy.headPos(_l));
+  juice.energyBurst(point, 0.6 + k);
+  sfx.charged(k);
+  game.ui.combo();
+  enemy.heavyHit({ x: dir * CFG.knockHeavy * (1 + CFG.chargeKnock * k * 0.6), y: CFG.knockUp * (1 + 0.4 * k) });
   if (ko) game.onKO(enemy);
 }
 

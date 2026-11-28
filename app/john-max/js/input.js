@@ -8,6 +8,7 @@ export class Input {
     this.mode = 'touch';
     this.move = { x: 0, z: 0 };
     this.presses = []; // { action, t }
+    this.down = {}; // action -> instant d'appui si maintenu (sources tactile, clavier, manette)
     this.keys = new Set();
     this.stick = { x: 0, z: 0, id: null, ox: 0, oy: 0 };
     this.gpPrev = {};
@@ -29,6 +30,18 @@ export class Input {
     this.presses.push({ action, t: now() });
   }
 
+  hold(action, src, on) {
+    const k = action + ':' + src;
+    if (on) { if (!this.down[k]) this.down[k] = now(); } else delete this.down[k];
+  }
+
+  // Durée d'appui en cours (0 si relâché), toutes sources confondues
+  heldFor(action) {
+    let t0 = Infinity;
+    for (const k in this.down) if (k.startsWith(action + ':')) t0 = Math.min(t0, this.down[k]);
+    return t0 === Infinity ? 0 : now() - t0;
+  }
+
   // Consomme la pression la plus récente de moins de maxAge secondes (buffer d'input).
   take(action, maxAge) {
     const t = now();
@@ -45,19 +58,25 @@ export class Input {
   _bindKeyboard() {
     const atk = ['KeyJ', 'Space', 'KeyX', 'Enter'];
     const upr = ['KeyK', 'KeyI', 'KeyC'];
+    const dge = ['KeyL', 'ShiftLeft', 'ShiftRight', 'KeyV'];
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this._setMode('keyboard');
       this.keys.add(e.code);
       if (atk.includes(e.code)) {
         this.press('attack');
+        this.hold('attack', 'kb', true);
         e.preventDefault();
       }
       if (upr.includes(e.code)) this.press('upper');
+      if (dge.includes(e.code)) this.press('dodge');
       if (e.code === 'Backquote' || e.code === 'KeyG') this.onMenu && this.onMenu();
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
+    window.addEventListener('keyup', (e) => {
+      this.keys.delete(e.code);
+      if (atk.includes(e.code) && !atk.some((c) => c !== e.code && this.keys.has(c))) this.hold('attack', 'kb', false);
+    });
+    window.addEventListener('blur', () => { this.keys.clear(); this.down = {}; });
   }
 
   _bindTouch() {
@@ -105,16 +124,18 @@ export class Input {
       el.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'touch') this._setMode('touch');
         this.press(action);
+        this.hold(action, 'touch', true);
+        el.setPointerCapture(e.pointerId);
         el.classList.add('down');
         e.preventDefault();
       });
-      const up = () => el.classList.remove('down');
+      const up = () => { el.classList.remove('down'); this.hold(action, 'touch', false); };
       el.addEventListener('pointerup', up);
       el.addEventListener('pointercancel', up);
-      el.addEventListener('pointerleave', up);
     };
     bindButton(btn, 'attack');
     bindButton(document.getElementById('btn-upper'), 'upper');
+    bindButton(document.getElementById('btn-dodge'), 'dodge');
 
     // Un toucher n'importe où repasse en mode tactile
     window.addEventListener('touchstart', () => this._setMode('touch'), { passive: true });
@@ -132,10 +153,12 @@ export class Input {
         if (p && !prev[i]) {
           any = true;
           if (i === 0 || i === 2) this.press('attack');
-          if (i === 3 || i === 1) this.press('upper');
+          if (i === 3) this.press('upper');
+          if (i === 1 || i === 5) this.press('dodge');
           if (i === 9 && this.onMenu) this.onMenu();
         }
       });
+      this.hold('attack', 'gp' + gp.index, b[0] || b[2]);
       this.gpPrev[gp.index] = b;
       let ax = gp.axes[0] || 0, az = gp.axes[1] || 0;
       if (Math.hypot(ax, az) < DEAD) ax = az = 0;
